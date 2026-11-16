@@ -657,8 +657,10 @@ function renderPicker(w){
   h += `<div class="who-row">` + PLAYERS.map(p => `<button class="who-btn ${me===p.id?"on":""}" style="--c:${p.color}" data-me="${p.id}">${p.name}</button>`).join("") + `</div>`;
   if (me){
     let lastDay = "";
-    w.all.forEach(g => {
-      const locked = g.state !== "pre";
+    const lockedN = w.all.length - open.length;
+    if (lockedN) h += `<div class="hint">🔒 ${lockedN} game${lockedN>1?"s have":" has"} already kicked off and ${lockedN>1?"are":"is"} locked.</div>`;
+    open.forEach(g => {
+      const locked = false;
       const cur = draft[g.key] || g.picks[me];
       const day = new Date(g.date).toLocaleDateString([], {weekday:"short", month:"short", day:"numeric"});
       const time = new Date(g.date).toLocaleTimeString([], {hour:"numeric", minute:"2-digit"});
