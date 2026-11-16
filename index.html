@@ -157,6 +157,7 @@ tr:last-child td{border-bottom:0}
 .avatar.ph{object-fit:cover;padding:0;border:2px solid var(--c)}
 .polaroid.ai{position:relative}
 .polaroid.ai:after{content:"AI";position:absolute;top:12px;right:12px;font:800 10px Inter,sans-serif;letter-spacing:.08em;background:#111c;color:#fff;padding:3px 6px;border-radius:5px}
+.qph.hy{border-color:#fbbf24}
 .hrow .qph{width:34px;height:34px}
 footer{margin-top:34px;font-size:12px;color:var(--muted);line-height:1.6}
 </style>
@@ -225,11 +226,11 @@ footer{margin-top:34px;font-size:12px;color:var(--muted);line-height:1.6}
 const SEASON = 2026;
 const DB = "https://roommate-pickem-default-rtdb.firebaseio.com/pickem";
 const PLAYERS = [
-  {id:"D", photo:"photos/ai-D.jpg", name:"Danny", color:"#f472b6"},
-  {id:"E", photo:"photos/ai-E.jpg", name:"Ethan", color:"#38bdf8"},
-  {id:"C", photo:"photos/ai-C.jpg", name:"Chris", color:"#fbbf24"},
-  {id:"M", photo:"photos/ai-M.jpg", name:"Mike",  color:"#4ade80"},
-  {id:"A", photo:"photos/ai-A.jpg", name:"Alex",  color:"#a78bfa", from: 11}   // joined in Week 11
+  {id:"D", photo:"photos/ai-D.jpg", happy:"photos/win-D.jpg", name:"Danny", color:"#f472b6"},
+  {id:"E", photo:"photos/ai-E.jpg", happy:"photos/win-E.jpg", name:"Ethan", color:"#38bdf8"},
+  {id:"C", photo:"photos/ai-C.jpg", happy:"photos/win-C.jpg", name:"Chris", color:"#fbbf24"},
+  {id:"M", photo:"photos/ai-M.jpg", happy:"photos/win-M.jpg", name:"Mike",  color:"#4ade80"},
+  {id:"A", photo:"photos/ai-A.jpg", happy:"photos/win-A.jpg", name:"Alex",  color:"#a78bfa", from: 11}   // joined in Week 11
 ];
 const NOTES = {10: "Missed Thursday night and the Munich game. Week 10 odds: bet365 via FOX Sports."};
 let WEEKS = [];
@@ -375,7 +376,7 @@ function renderSeason(){
     const S = x.s[who[0].id];
     const list = kind === "fame" ? PERKS : PUNISH;
     const what = list[hashStr("w" + x.wk.week + kind) % list.length];
-    const thumbs = kind === "shame" ? who.filter(p => p.photo).map(p => `<img class="qph" src="${p.photo}" alt="">`).join("") : "";
+    const thumbs = who.map(p => kind === "shame" ? p.photo : p.happy).filter(Boolean).map(src => `<img class="qph${kind === "fame" ? " hy" : ""}" src="${src}" alt="">`).join("");
     return `<div class="hrow"><span class="wk">Week ${x.wk.week}</span>${thumbs}<div><b>${who.map(p=>p.name).join(" & ")}</b> (${S.correct}–${S.wrong})<small>${kind === "fame" ? "Prize" : "Punishment"}: ${esc(what)}</small></div></div>`;
   };
   $("fame").innerHTML = fameT + (doneWeeks.length ? doneWeeks.map(x => row(x, "fame")).join("") : "<div class='hrow'><small>First crown gets handed out when a week wraps up.</small></div>");
@@ -420,7 +421,7 @@ function render(){
     const crown = decided >= 3 && topCorrect > botCorrect ? (S.correct === topCorrect ? '<span class="crown">👑</span>' : S.correct === botCorrect ? '<span class="crown">🤡</span>' : "") : "";
     return `<div class="pcard" style="--c:${p.color}">
       <div class="rank">#${i+1}</div>
-      <div class="who">${crown.includes("🤡") && p.photo ? `<img class="avatar ph" src="${p.photo}" alt="">` : `<div class="avatar">${p.id}</div>`}<div class="pname">${p.name} ${crown}</div></div>
+      <div class="who">${crown.includes("🤡") && p.photo ? `<img class="avatar ph" src="${p.photo}" alt="">` : crown.includes("👑") && p.happy ? `<img class="avatar ph" src="${p.happy}" alt="">` : `<div class="avatar">${p.id}</div>`}<div class="pname">${p.name} ${crown}</div></div>
       <div class="rec">${S.correct}-${S.wrong}<small>${(() => { const left = w.games.filter(g => g.winner == null && g.raw[p.id]).length; return left ? left + " to play" : "final"; })()}</small></div>
       <div class="statrow"><span>Projected wins</span><b>${fmt1(S.projected)}</b></div>
       <div class="statrow"><span>Chalk % / Dogs picked</span><b>${pct(S.chalk)} / ${S.dogs}</b></div>
@@ -629,7 +630,7 @@ function lockerRoom(w, st){
 function renderTalk(w, st){
   const L = lockerRoom(w, st);
   $("talk").innerHTML = L.length ? L.map(l => `<div class="quip ${l.kind}" style="--c:${l.p ? l.p.color : "#94a3b8"}">
-      ${l.kind === "diss" && l.p && l.p.photo ? `<img class="qph" src="${l.p.photo}" alt="">` : `<span class="qic">${l.kind === "hype" ? "🔥" : "🗑️"}</span>`}<span>${esc(l.text)}</span></div>`).join("")
+      ${l.p && (l.kind === "diss" ? l.p.photo : l.p.happy) ? `<img class="qph${l.kind === "hype" ? " hy" : ""}" src="${l.kind === "diss" ? l.p.photo : l.p.happy}" alt="">` : `<span class="qic">${l.kind === "hype" ? "🔥" : "🗑️"}</span>`}<span>${esc(l.text)}</span></div>`).join("")
     : '<div class="empty">Nothing to talk about yet. Give it a few games. 🍿</div>';
 }
 
@@ -701,8 +702,9 @@ function updateCaptions(w){
   document.querySelectorAll(".polaroid.ai").forEach(f => {
     const p = P(f.dataset.who), S = st[p.id];
     let cap = PHOTOS.find(x => x[0] === f.dataset.src)[1];
-    if (S && dec2 >= 3 && hi > lo && S.correct === lo) cap = `${p.name}: Week ${w.week}'s dish pit resident (${S.correct}–${S.wrong})`;
-    else if (S && dec2 >= 3 && hi > lo && S.correct === hi) cap = `${p.name}… somehow leading Week ${w.week}. Tears of joy?`;
+    const ranked = S && dec2 >= 3 && hi > lo;
+    if (f.dataset.kind === "cry" && ranked && S.correct === lo) cap = `${p.name}: Week ${w.week}'s dish pit resident (${S.correct}–${S.wrong})`;
+    if (f.dataset.kind === "win" && ranked && S.correct === hi) cap = `${p.name} leading Week ${w.week} at ${S.correct}–${S.wrong}. Insufferable.`;
     f.dataset.cap = cap; f.querySelector("figcaption").textContent = cap;
   });
   document.querySelectorAll(".polaroid:not(.ai)").forEach((f, i) => {
@@ -727,15 +729,20 @@ const PHOTOS = [
   ["photos/ai-E.jpg", "Ethan finding out Eagles fans can't pick either", "E"],
   ["photos/ai-A.jpg", "Alex caught a trophy fish. Still can't catch a W.", "A"],
   ["photos/ai-M.jpg", "Mike flew across the world and still couldn't find a good pick", "M"],
-  ["photos/ai-D.jpg", "Danny after taking the Bucs. Again.", "D"]
+  ["photos/ai-D.jpg", "Danny after taking the Bucs. Again.", "D"],
+  ["photos/win-D.jpg", "Danny when the Bucs actually cover", "D", "win"],
+  ["photos/win-M.jpg", "Mike serenading the leaderboard", "M", "win"],
+  ["photos/win-A.jpg", "Alex after hitting a 20% underdog", "A", "win"],
+  ["photos/win-E.jpg", "Ethan sweating out a 3-point lead", "E", "win"],
+  ["photos/win-C.jpg", "Chris celebrating a correct pick with a sandwich", "C", "win"]
 ];
 function renderPhotos(){
   const ph = [...PHOTOS].sort(() => Math.random() - 0.5);
   document.querySelectorAll(".photo-strip").forEach((el, i) => {
-    const per = Math.ceil(ph.length / 3);
-    el.innerHTML = ph.slice(i * per, i * per + per).map(([src, cap, who], j) => {
+    const per = Math.min(5, Math.ceil(ph.length / 3));   // 15 random photos per visit
+    el.innerHTML = ph.slice(i * per, i * per + per).map(([src, cap, who, kind], j) => {
       const r = ((hashStr(src) % 9) - 4) * 1.1;
-      return `<figure class="polaroid${who ? " ai" : ""}" style="--r:${r}deg" data-src="${src}" data-cap="${esc(cap)}"${who ? ` data-who="${who}"` : ""}><img src="${src}" alt="" loading="lazy"><figcaption>${esc(cap)}</figcaption></figure>`;
+      return `<figure class="polaroid${who ? " ai" : ""}" style="--r:${r}deg" data-src="${src}" data-cap="${esc(cap)}"${who ? ` data-who="${who}" data-kind="${kind || "cry"}"` : ""}><img src="${src}" alt="" loading="lazy"><figcaption>${esc(cap)}</figcaption></figure>`;
     }).join("");
   });
   document.querySelectorAll(".polaroid").forEach(f => f.onclick = () => {
