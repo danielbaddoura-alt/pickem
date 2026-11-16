@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Roommate Pick'em Showdown</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0a0f1e;--panel:#121a2e;--panel2:#18223c;--line:#253054;--text:#eef1f8;--muted:#8d97b5;
+  --win:#22c55e;--loss:#ef4444;--pend:#3a4566;--gold:#fbbf24;--turf:#0f3d24;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:Inter,system-ui,-apple-system,sans-serif;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1000px;margin:0 auto;padding:0 14px 60px}
+.hero{position:relative;overflow:hidden;border-radius:0 0 22px 22px;margin:0 -14px 18px;padding:28px 20px 22px;
+  background:
+   repeating-linear-gradient(90deg,transparent 0 calc(10% - 2px),rgba(255,255,255,.08) calc(10% - 2px) 10%),
+   linear-gradient(180deg,#14542f 0%,#0d3a21 100%);}
+.hero:after{content:"";position:absolute;inset:auto 0 0 0;height:60px;background:linear-gradient(transparent,rgba(10,15,30,.6))}
+.kicker{font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:#bfe8cf;font-weight:600}
+h1{font-family:'Bebas Neue',Impact,sans-serif;font-weight:400;font-size:clamp(44px,11vw,84px);line-height:.88;margin:6px 0 8px;letter-spacing:.5px}
+h1 span{color:var(--gold)}
+.sub{color:#d6efe0;font-size:14px;max-width:560px}
+h2{font-family:'Bebas Neue',Impact,sans-serif;font-weight:400;font-size:30px;letter-spacing:.5px;margin:30px 0 10px;display:flex;align-items:baseline;gap:10px}
+h2 small{font-family:Inter;font-size:12px;color:var(--muted);letter-spacing:0}
+.tabs{display:flex;gap:8px;flex-wrap:wrap;margin:4px 0 6px}
+.tab{background:var(--panel2);border:1px solid var(--line);color:var(--text);padding:8px 14px;border-radius:999px;font:600 13px Inter;cursor:pointer}
+.tab.on{background:var(--gold);color:#1a1300;border-color:var(--gold)}
+.weekmeta{font-size:13px;color:var(--muted);margin:6px 0 0}
+.progress{height:6px;background:var(--panel2);border-radius:9px;overflow:hidden;margin-top:8px}
+.progress i{display:block;height:100%;background:linear-gradient(90deg,var(--win),#86efac)}
+
+/* leaderboard */
+.board{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px}
+.pcard{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:14px 14px 12px;overflow:hidden}
+.pcard:before{content:"";position:absolute;left:0;top:0;bottom:0;width:5px;background:var(--c)}
+.pcard .rank{position:absolute;right:12px;top:8px;font-family:'Bebas Neue';font-size:46px;color:rgba(255,255,255,.08);line-height:1}
+.pcard .who{display:flex;align-items:center;gap:10px}
+.avatar{width:38px;height:38px;border-radius:50%;display:grid;place-items:center;font:800 16px Inter;background:var(--c);color:#0a0f1e;flex:none}
+.pname{font-weight:800;font-size:18px}
+.crown{font-size:16px}
+.rec{font-family:'Bebas Neue';font-size:40px;line-height:1;margin:10px 0 2px}
+.rec small{font-family:Inter;font-size:12px;color:var(--muted);margin-left:6px}
+.statrow{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-top:6px;gap:8px}
+.statrow b{color:var(--text);font-weight:600}
+.oddsbar{height:8px;border-radius:9px;background:var(--panel2);overflow:hidden;margin-top:4px}
+.oddsbar i{display:block;height:100%;background:var(--c)}
+
+/* games */
+.games{display:grid;gap:10px}
+.game{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px}
+.ghead{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.matchup{font-weight:800;font-size:16px;letter-spacing:.3px}
+.matchup .at{color:var(--muted);font-weight:500;margin:0 6px}
+.matchup .w{color:var(--win)}
+.status{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:4px 8px;border-radius:6px;background:var(--panel2);color:var(--muted)}
+.status.final{background:rgba(34,197,94,.15);color:#86efac}
+.tags{display:flex;gap:6px;flex-wrap:wrap}
+.tag{font-size:10.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;padding:3px 7px;border-radius:6px;background:#2a2150;color:#c4b5fd}
+.tag.civil{background:#3b1d1d;color:#fca5a5}
+.tag.lock{background:#1d3324;color:#86efac}
+.fav{display:flex;align-items:center;gap:8px;margin:10px 0 8px;font-size:12px;color:var(--muted)}
+.fav .bar{flex:1;height:10px;border-radius:9px;overflow:hidden;display:flex;background:var(--panel2)}
+.fav .bar i{display:block;height:100%}
+.fav .l,.fav .r{min-width:74px}
+.fav .r{text-align:right}
+.fav b{color:var(--text)}
+.picks{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.pick{border-radius:10px;padding:7px 6px;text-align:center;background:var(--panel2);border:1px solid var(--line);position:relative}
+.pick .ini{font-size:10.5px;color:var(--muted);font-weight:600}
+.pick .tm{font-weight:800;font-size:15px;letter-spacing:.3px}
+.pick .pp{font-size:10.5px;color:var(--muted)}
+.pick.win{background:rgba(34,197,94,.16);border-color:rgba(34,197,94,.55)}
+.pick.loss{background:rgba(239,68,68,.12);border-color:rgba(239,68,68,.45)}
+.pick.lead{border-color:rgba(34,197,94,.6);border-style:dashed}
+.pick.trail{border-color:rgba(239,68,68,.5);border-style:dashed}
+.status.live{background:rgba(239,68,68,.18);color:#fca5a5;animation:pulse 2s infinite}
+@keyframes pulse{50%{opacity:.6}}
+.pick.loss .tm{text-decoration:line-through;text-decoration-color:rgba(239,68,68,.8)}
+.pick .badge{position:absolute;top:-7px;right:-4px;font-size:13px}
+
+/* awards */
+.awards{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}
+.award{background:linear-gradient(160deg,var(--panel2),var(--panel));border:1px solid var(--line);border-radius:14px;padding:12px 14px}
+.award .ic{font-size:24px}
+.award .t{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--gold);font-weight:700;margin-top:4px}
+.award .v{font-weight:800;font-size:17px;margin-top:2px}
+.award .d{font-size:12.5px;color:var(--muted);margin-top:3px;line-height:1.35}
+.award.post{border-color:rgba(251,191,36,.35)}
+
+/* tables */
+table{width:100%;border-collapse:collapse;font-size:13.5px}
+.tbl{background:var(--panel);border:1px solid var(--line);border-radius:14px;overflow:auto}
+th,td{padding:9px 10px;text-align:center;border-bottom:1px solid var(--line);white-space:nowrap}
+th{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
+td:first-child,th:first-child{text-align:left}
+tr:last-child td{border-bottom:0}
+.dot{display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--c);margin-right:7px;vertical-align:middle}
+.pos{color:#86efac}.neg{color:#fca5a5}
+.heat{border-radius:8px;font-weight:700}
+.note{font-size:12px;color:var(--muted);line-height:1.5;margin-top:10px}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin:2px 0 10px}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.sw{width:12px;height:12px;border-radius:4px;display:inline-block}
+.tip{position:fixed;pointer-events:none;background:#000c;color:#fff;font-size:12px;padding:6px 8px;border-radius:8px;opacity:0;transition:opacity .1s;z-index:9}
+footer{margin-top:34px;font-size:12px;color:var(--muted);line-height:1.6}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="hero">
+    <div class="kicker">2026 NFL Season · Apartment Edition</div>
+    <h1>Roommate <span>Pick'em</span><br>Showdown</h1>
+    <div class="sub">Danny vs Ethan vs Chris vs Mike. Every pick, every upset, every bad beat, measured against what Vegas thought.</div>
+  </header>
+
+  <div class="tabs" id="tabs"></div>
+  <div class="weekmeta" id="weekmeta"></div>
+  <div class="progress"><i id="prog"></i></div>
+  <div class="weekmeta" id="sync"></div>
+
+  <h2 id="lb-h">Leaderboard <small id="lb-sub"></small></h2>
+  <div class="board" id="board"></div>
+
+  <h2>Trophy Case <small>this week's superlatives</small></h2>
+  <div class="awards" id="awards"></div>
+
+  <h2>The Picks <small>vs the betting odds</small></h2>
+  <div class="legend">
+    <span><i class="sw" style="background:rgba(34,197,94,.5)"></i>Hit</span>
+    <span><i class="sw" style="background:rgba(239,68,68,.45)"></i>Miss</span>
+    <span><i class="sw" style="background:var(--pend)"></i>Pending</span><span><i class="sw" style="border:1px dashed #22c55e"></i>Winning live</span>
+    <span>🐶 underdog pick</span><span>🐺 lone wolf (only one on that side)</span>
+  </div>
+  <div class="games" id="games"></div>
+
+  <h2>Hive Mind Meter <small>% of games each pair picked the same</small></h2>
+  <div class="tbl"><table id="agree"></table></div>
+
+  <h2>Season Standings <small>all weeks combined</small></h2>
+  <div class="tbl"><table id="season"></table></div>
+  <div class="note"><b>Luck</b> = actual wins minus expected wins (the sum of each picked team's win probability in decided games). Positive means you're running hot; negative means the football gods owe you one. <b>Chalk %</b> = average win probability of your picks — high means you ride favorites, low means you love chaos.</div>
+
+  <footer id="foot"></footer>
+</div>
+<div class="tip" id="tip"></div>
+
+<script src="picks.js"></script>
+<script>
+const TEAM_COLORS = {MIN:"#4F2683",GB:"#203731",BUF:"#00338D",NYJ:"#125740",KC:"#E31837",ATL:"#A71930",HOU:"#03202F",CLE:"#FF3C00",
+  JAX:"#006778",TEN:"#4B92DB",MIA:"#008E97",IND:"#002C5F",CAR:"#0085CA",NO:"#D3BC8D",SEA:"#69BE28",LV:"#A5ACAF",LAR:"#003594",
+  ARI:"#97233F",SF:"#AA0000",DAL:"#869397",PIT:"#FFB612",CIN:"#FB4F14",LAC:"#0080C6",BAL:"#241773"};
+
+/* ============================================================ */
+const $ = id => document.getElementById(id);
+const imp = ml => ml < 0 ? (-ml)/(-ml+100) : 100/(ml+100);
+const p1 = g => { if (g.ml1 == null || g.ml2 == null) return 0.5; const a = imp(g.ml1), b = imp(g.ml2); return a/(a+b); };   // vig-free
+const pSide = (g, side) => side === 1 ? p1(g) : 1 - p1(g);
+const tm = (g, side) => side === 1 ? g.t1 : g.t2;
+const pct = x => Math.round(x*100) + "%";
+const ml = x => x == null ? "n/a" : x > 0 ? "+" + x : "" + x;
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const P = id => PLAYERS.find(p => p.id === id);
+const names = ids => ids.map(i => P(i).name).join(" & ");
+const fmt1 = x => (Math.round(x*10)/10).toFixed(1);
+const signed = x => (x >= 0 ? "+" : "") + fmt1(x);
+
+function weekStats(w){
+  const st = {};
+  PLAYERS.forEach(p => st[p.id] = {correct:0, wrong:0, pending:0, exp:0, pendExp:0, dogs:0, dogHits:0, chalk:0, n:0,
+                                    lone:0, bold:null, perfect:1, badBeat:null});
+  w.games.forEach(g => {
+    const counts = {1:0, 2:0};
+    PLAYERS.forEach(p => { const s = g.picks[p.id]; if (s) counts[s]++; });
+    PLAYERS.forEach(p => {
+      const s = g.picks[p.id]; if (!s) return;
+      const S = st[p.id], pr = pSide(g, s);
+      S.n++; S.chalk += pr;
+      if (pr < 0.5) S.dogs++;
+      if (counts[s] === 1) S.lone++;
+      if (!S.bold || pr < S.bold.p) S.bold = {g, side:s, p:pr};
+      if (g.winner == null){ S.pending++; S.pendExp += pr; S.perfect *= pr; }
+      else {
+        S.exp += pr;
+        if (g.winner === s){ S.correct++; if (pr < 0.5) S.dogHits++; }
+        else { S.wrong++; S.perfect = 0; if (!S.badBeat || pr > S.badBeat.p) S.badBeat = {g, side:s, p:pr}; }
+      }
+    });
+  });
+  PLAYERS.forEach(p => { const S = st[p.id]; S.chalk = S.n ? S.chalk/S.n : 0; S.projected = S.correct + S.pendExp; S.luck = S.correct - S.exp; });
+  return st;
+}
+
+// Monte Carlo: chance each player wins (or ties for) the week, using the odds for every game still pending
+function simulate(w, N = 20000){
+  const win = {}; PLAYERS.forEach(p => win[p.id] = 0);
+  const pend = w.games.filter(g => g.winner == null);
+  const base = {}; PLAYERS.forEach(p => base[p.id] = w.games.filter(g => g.winner != null && g.picks[p.id] === g.winner).length);
+  const probs = pend.map(p1);
+  for (let i = 0; i < N; i++){
+    const sc = {...base};
+    pend.forEach((g, k) => { const res = Math.random() < probs[k] ? 1 : 2;
+      PLAYERS.forEach(p => { if (g.picks[p.id] === res) sc[p.id]++; }); });
+    const top = Math.max(...Object.values(sc));
+    const lead = PLAYERS.filter(p => sc[p.id] === top);
+    lead.forEach(p => win[p.id] += 1/lead.length);
+  }
+  PLAYERS.forEach(p => win[p.id] /= N);
+  return win;
+}
+
+function leaders(st, key, dir = 1){
+  const vals = PLAYERS.map(p => st[p.id][key]);
+  const best = dir > 0 ? Math.max(...vals) : Math.min(...vals);
+  return PLAYERS.filter(p => st[p.id][key] === best).map(p => p.id);
+}
+
+function agreement(weeks){
+  const m = {};
+  PLAYERS.forEach(a => PLAYERS.forEach(b => m[a.id+b.id] = {same:0, n:0}));
+  weeks.forEach(w => w.games.forEach(g => PLAYERS.forEach(a => PLAYERS.forEach(b => {
+    if (g.picks[a.id] && g.picks[b.id]){ m[a.id+b.id].n++; if (g.picks[a.id] === g.picks[b.id]) m[a.id+b.id].same++; }
+  }))));
+  return m;
+}
+
+let current = WEEKS.length - 1;
+
+function render(){
+  const w = WEEKS[current];
+  const st = weekStats(w);
+  const sim = simulate(w);
+  const decided = w.games.filter(g => g.winner != null).length;
+  const allDone = decided === w.games.length;
+
+  // tabs
+  $("tabs").innerHTML = WEEKS.map((x, i) => `<button class="tab ${i===current?"on":""}" data-i="${i}">Week ${x.week}</button>`).join("");
+  $("tabs").querySelectorAll(".tab").forEach(b => b.onclick = () => { current = +b.dataset.i; render(); });
+  $("weekmeta").textContent = `Week ${w.week}: ${decided} of ${w.games.length} games decided` + (w.note ? ` · ${w.note}` : "");
+  $("prog").style.width = (decided / w.games.length * 100) + "%";
+
+  // leaderboard
+  const order = [...PLAYERS].sort((a, b) => st[b.id].correct - st[a.id].correct || st[b.id].projected - st[a.id].projected);
+  const topCorrect = st[order[0].id].correct;
+  $("lb-sub").textContent = allDone ? "final" : "live — projected wins & odds to take the week update as games finish";
+  $("board").innerHTML = order.map((p, i) => {
+    const S = st[p.id];
+    const crown = decided && S.correct === topCorrect ? '<span class="crown">👑</span>' : "";
+    return `<div class="pcard" style="--c:${p.color}">
+      <div class="rank">#${i+1}</div>
+      <div class="who"><div class="avatar">${p.id}</div><div class="pname">${p.name} ${crown}</div></div>
+      <div class="rec">${S.correct}-${S.wrong}<small>${S.pending ? S.pending + " pending" : "final"}</small></div>
+      <div class="statrow"><span>Projected wins</span><b>${fmt1(S.projected)}</b></div>
+      <div class="statrow"><span>Chalk % / Dogs picked</span><b>${pct(S.chalk)} / ${S.dogs}</b></div>
+      <div class="statrow"><span>Odds to win the week</span><b>${pct(sim[p.id])}</b></div>
+      <div class="oddsbar"><i style="width:${sim[p.id]*100}%"></i></div>
+    </div>`;
+  }).join("");
+
+  // awards
+  const A = [];
+  const chalk = leaders(st, "chalk", 1);
+  A.push({ic:"🔒", t:"Chalk Merchant", v:names(chalk), d:`Rode the favorites hardest: average pick had a ${pct(st[chalk[0]].chalk)} chance to win.`});
+  const gun = leaders(st, "dogs", 1);
+  A.push({ic:"🤠", t:"Gunslinger", v:names(gun), d:`Most underdogs picked: ${st[gun[0]].dogs}.`});
+  let bold = null; PLAYERS.forEach(p => { const b = st[p.id].bold; if (b && (!bold || b.p < bold.p)) bold = {...b, who:p.id}; });
+  if (bold){
+    const r = bold.g.winner == null ? "Pending…" : (bold.g.winner === bold.side ? "AND IT HIT. 🎉" : "It did not hit.");
+    A.push({ic:"💣", t:"Boldest Pick", v:`${P(bold.who).name}: ${tm(bold.g, bold.side)}`, d:`Took ${tm(bold.g,bold.side)} (${pct(bold.p)} to win, ${ml(bold.side===1?bold.g.ml1:bold.g.ml2)}) over ${tm(bold.g,3-bold.side)}. ${r}`});
+  }
+  const lone = leaders(st, "lone", 1);
+  if (st[lone[0]].lone > 0) A.push({ic:"🐺", t:"Lone Wolf", v:names(lone), d:`Went against the whole apartment ${st[lone[0]].lone} time${st[lone[0]].lone>1?"s":""}.`});
+  const ag = agreement([w]);
+  let hi = null, lo = null;
+  PLAYERS.forEach((a, i) => PLAYERS.slice(i+1).forEach(b => { const x = ag[a.id+b.id], r = x.same/x.n;
+    if (!hi || r > hi.r) hi = {a, b, r, x}; if (!lo || r < lo.r) lo = {a, b, r, x}; }));
+  A.push({ic:"👯", t:"Hive Mind", v:`${hi.a.name} & ${hi.b.name}`, d:`Same pick in ${hi.x.same} of ${hi.x.n} games. Are you two sharing a brain?`});
+  A.push({ic:"🥊", t:"Odd Couple", v:`${lo.a.name} & ${lo.b.name}`, d:`Agreed on only ${lo.x.same} of ${lo.x.n}. Someone's going to be insufferable.`});
+  const civil = w.games.filter(g => { const c = PLAYERS.filter(p => g.picks[p.id] === 1).length; return c === 2; });
+  const unan = w.games.filter(g => { const c = PLAYERS.filter(p => g.picks[p.id] === 1).length; return c === 0 || c === 4; });
+  A.push({ic:"⚔️", t:"Civil Wars", v:`${civil.length} games split 2–2`, d: civil.length ? civil.map(g => `${g.t1}@${g.t2}`).join(", ") + ". These decide the week." : "Nobody's fighting this week."});
+  A.push({ic:"🤝", t:"Group Locks", v:`${unan.length} unanimous`, d: unan.length ? unan.map(g => tm(g, g.picks.D)).join(", ") + ". If these lose, everyone suffers." : "Not one game everyone agreed on."});
+  const perf = leaders(st, "perfect", 1);
+  A.push({ic:"🎯", t:"Perfect-Week Odds", v: st[perf[0]].perfect > 0 ? `${names(perf)}: 1 in ${Math.round(1/st[perf[0]].perfect).toLocaleString()}` : "Dead for everyone",
+    d: st[perf[0]].perfect > 0 ? "Best shot at going 100% if the odds are right." : "Everyone has at least one miss. Perfection is a myth."});
+
+  // post-result awards
+  if (decided){
+    const dogK = leaders(st, "dogHits", 1);
+    if (st[dogK[0]].dogHits > 0) A.push({ic:"🔥", t:"Upset King", v:names(dogK), post:1, d:`Cashed ${st[dogK[0]].dogHits} underdog pick${st[dogK[0]].dogHits>1?"s":""}.`});
+    const lucky = leaders(st, "luck", 1), cold = leaders(st, "luck", -1);
+    A.push({ic:"🍀", t:"Luckiest", v:names(lucky), post:1, d:`${signed(st[lucky[0]].luck)} wins above what the odds expected.`});
+    A.push({ic:"🥶", t:"Snakebitten", v:names(cold), post:1, d:`${signed(st[cold[0]].luck)} wins vs expectation. Brutal.`});
+    let bb = null; PLAYERS.forEach(p => { const b = st[p.id].badBeat; if (b && (!bb || b.p > bb.p)) bb = {...b, who:p.id}; });
+    if (bb) A.push({ic:"💀", t:"Bad Beat", v:`${P(bb.who).name}: ${tm(bb.g, bb.side)}`, post:1, d:`Had ${tm(bb.g,bb.side)} at ${pct(bb.p)} to win, and they lost.`});
+    let up = null; w.games.filter(g => g.winner != null).forEach(g => { const pr = pSide(g, g.winner); if (!up || pr < up.p) up = {g, p:pr}; });
+    if (up && up.p < 0.5){
+      const had = PLAYERS.filter(p => up.g.picks[p.id] === up.g.winner);
+      A.push({ic:"😱", t:"Upset of the Week", v:`${tm(up.g, up.g.winner)} over ${tm(up.g, 3-up.g.winner)}`, post:1,
+        d:`Only a ${pct(up.p)} shot. ${had.length ? "Called it: " + had.map(p=>p.name).join(", ") + "." : "Nobody saw it coming."}`});
+    }
+  }
+  $("awards").innerHTML = A.map(a => `<div class="award ${a.post?"post":""}"><div class="ic">${a.ic}</div><div class="t">${a.t}</div><div class="v">${esc(a.v)}</div><div class="d">${esc(a.d)}</div></div>`).join("");
+
+  // games
+  $("games").innerHTML = w.games.map(g => {
+    const pa = p1(g), c1 = PLAYERS.filter(p => g.picks[p.id] === 1).length;
+    const tags = [];
+    if (c1 === 2) tags.push('<span class="tag civil">2–2 split</span>');
+    if (c1 === 0 || c1 === 4) tags.push('<span class="tag lock">unanimous</span>');
+    const st8 = g.winner == null ? `<span class="status ${g.live?"live":""}">${esc(g.live || g.kick || "Scheduled")}</span>` : `<span class="status final">Final${g.score ? " · " + esc(g.score) : ""}</span>`;
+    const picks = PLAYERS.map(p => {
+      const s = g.picks[p.id]; const pr = pSide(g, s);
+      const cls = g.winner == null ? (g.liveScore && g.liveScore[0] !== g.liveScore[1] ? ((g.liveScore[0] > g.liveScore[1]) === (s === 1) ? "lead" : "trail") : "") : (g.winner === s ? "win" : "loss");
+      const lone = PLAYERS.filter(q => g.picks[q.id] === s).length === 1;
+      const badge = (lone ? "🐺" : "") + (pr < 0.5 ? "🐶" : "");
+      return `<div class="pick ${cls}" style="box-shadow:inset 0 3px 0 ${p.color}"><div class="ini">${p.name}</div><div class="tm">${tm(g,s)}</div><div class="pp">${pct(pr)}</div>${badge?`<span class="badge">${badge}</span>`:""}</div>`;
+    }).join("");
+    const w1 = g.winner === 1 ? "w" : "", w2 = g.winner === 2 ? "w" : "";
+    return `<div class="game">
+      <div class="ghead"><div class="matchup"><span class="${w1}">${g.t1}</span><span class="at">@</span><span class="${w2}">${g.t2}</span></div>
+        <div class="tags">${tags.join("")}${st8}</div></div>
+      <div class="fav" data-tip="${g.t1} ${ml(g.ml1)} / ${g.t2} ${ml(g.ml2)}">
+        <span class="l"><b>${g.t1}</b> ${pct(pa)}</span>
+        <span class="bar"><i style="width:${pa*100}%;background:${TEAM_COLORS[g.t1]||"#888"}"></i><i style="width:${(1-pa)*100}%;background:${TEAM_COLORS[g.t2]||"#555"}"></i></span>
+        <span class="r">${pct(1-pa)} <b>${g.t2}</b></span>
+      </div>
+      <div class="picks">${picks}</div>
+    </div>`;
+  }).join("");
+
+  // agreement matrix (season)
+  const agS = agreement(WEEKS);
+  let h = "<tr><th></th>" + PLAYERS.map(p => `<th>${p.name}</th>`).join("") + "</tr>";
+  PLAYERS.forEach(a => {
+    h += `<tr><td><span class="dot" style="--c:${a.color}"></span>${a.name}</td>`;
+    PLAYERS.forEach(b => {
+      if (a.id === b.id){ h += "<td style='color:var(--muted)'>—</td>"; return; }
+      const x = agS[a.id+b.id], r = x.n ? x.same/x.n : 0;
+      h += `<td><span class="heat" style="padding:4px 8px;background:rgba(251,191,36,${(r-0.4)*1.2})">${pct(r)}</span></td>`;
+    });
+    h += "</tr>";
+  });
+  $("agree").innerHTML = h;
+
+  // season
+  const season = {};
+  PLAYERS.forEach(p => season[p.id] = {w:0, l:0, exp:0, weeks:0, dogs:0, chalkSum:0, n:0});
+  WEEKS.forEach(wk => {
+    const s = weekStats(wk);
+    const done = wk.games.every(g => g.winner != null);
+    const top = Math.max(...PLAYERS.map(p => s[p.id].correct));
+    PLAYERS.forEach(p => { const S = season[p.id], x = s[p.id];
+      S.w += x.correct; S.l += x.wrong; S.exp += x.exp; S.dogs += x.dogHits; S.chalkSum += x.chalk * x.n; S.n += x.n;
+      if (done && x.correct === top) S.weeks++; });
+  });
+  const so = [...PLAYERS].sort((a, b) => season[b.id].w - season[a.id].w || season[a.id].l - season[b.id].l);
+  let t = "<tr><th>Player</th><th>W–L</th><th>Win %</th><th>Weeks won</th><th>Upsets hit</th><th>Chalk %</th><th>Luck</th></tr>";
+  so.forEach(p => { const S = season[p.id], g = S.w + S.l, luck = S.w - S.exp;
+    t += `<tr><td><span class="dot" style="--c:${p.color}"></span><b>${p.name}</b></td><td>${S.w}–${S.l}</td><td>${g ? pct(S.w/g) : "—"}</td><td>${S.weeks}</td><td>${S.dogs}</td><td>${S.n ? pct(S.chalkSum/S.n) : "—"}</td><td class="${g ? (luck >= 0 ? "pos" : "neg") : ""}">${g ? signed(luck) : "—"}</td></tr>`; });
+  $("season").innerHTML = t;
+
+  $("foot").innerHTML = `Odds: ${esc(w.odds || "ESPN moneylines")}. Percentages are moneylines with the bookmaker's cut removed. "Odds to win the week" simulates the remaining games 20,000 times using those odds (ties split the credit).<br>Scores update live from ESPN while this page is open. Picks: edit picks.js.`;
+
+  // tooltips
+  const tip = $("tip");
+  document.querySelectorAll("[data-tip]").forEach(el => {
+    el.onmousemove = e => { tip.textContent = el.dataset.tip; tip.style.left = Math.min(e.clientX + 12, innerWidth - 160) + "px"; tip.style.top = (e.clientY + 12) + "px"; tip.style.opacity = 1; };
+    el.onmouseleave = () => tip.style.opacity = 0;
+  });
+}
+
+/* ---------- live scores from ESPN ---------- */
+const ALIAS = {WSH:"WAS", LA:"LAR", JAC:"JAX"};
+const norm = a => ALIAS[a] || a;
+let lastSync = null, syncErr = false;
+
+async function loadWeek(w){
+  const url = `https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?dates=${SEASON}&seasontype=2&week=${w.week}`;
+  const r = await fetch(url, {cache:"no-store"});
+  if (!r.ok) throw new Error("ESPN " + r.status);
+  const j = await r.json();
+  const map = {};
+  (j.events || []).forEach(ev => {
+    const c = ev.competitions[0];
+    const home = c.competitors.find(x => x.homeAway === "home"), away = c.competitors.find(x => x.homeAway === "away");
+    const st = (c.status || ev.status).type;
+    const o = (c.odds || [])[0] || {};
+    map[norm(away.team.abbreviation) + "@" + norm(home.team.abbreviation)] = {
+      state: st.state, detail: st.shortDetail, as: +away.score, hs: +home.score,
+      mlA: o.awayTeamOdds && o.awayTeamOdds.moneyLine, mlH: o.homeTeamOdds && o.homeTeamOdds.moneyLine };
+  });
+  w.games.forEach(g => {
+    let m = map[g.t1 + "@" + g.t2], flip = false;
+    if (!m){ m = map[g.t2 + "@" + g.t1]; flip = true; }
+    if (!m) return;
+    const s1 = flip ? m.hs : m.as, s2 = flip ? m.as : m.hs;
+    if (g.ml1 == null && m.mlA != null && m.mlH != null){ g.ml1 = flip ? m.mlH : m.mlA; g.ml2 = flip ? m.mlA : m.mlH; g.espnOdds = true; }
+    g.live = null; g.liveScore = null;
+    if (m.state === "post"){ g.winner = s1 > s2 ? 1 : s2 > s1 ? 2 : 0; g.score = `${s1}-${s2}`; }
+    else if (m.state === "in"){ g.winner = null; g.live = `${m.detail} · ${g.t1} ${s1}, ${g.t2} ${s2}`; g.liveScore = [s1, s2]; }
+    else { g.winner = null; g.kick = m.detail; }
+  });
+}
+
+async function sync(){
+  try { await Promise.all(WEEKS.map(loadWeek)); lastSync = new Date(); syncErr = false; }
+  catch (e) { syncErr = true; }
+  WEEKS.forEach(w => w.games.forEach(g => { if (g.winner === undefined) g.winner = null; }));
+  render();
+  const anyLive = WEEKS.some(w => w.games.some(g => g.live));
+  $("sync").textContent = syncErr ? "⚠️ Couldn't reach ESPN for scores. Retrying shortly."
+    : `🟢 Live from ESPN · updated ${lastSync.toLocaleTimeString([], {hour:"numeric", minute:"2-digit"})}` + (anyLive ? " · refreshing every minute" : "");
+  setTimeout(sync, anyLive || syncErr ? 60000 : 300000);
+}
+WEEKS.forEach(w => w.games.forEach(g => { if (g.winner === undefined) g.winner = null; }));
+render();
+sync();
+</script>
+</body>
+</html>
