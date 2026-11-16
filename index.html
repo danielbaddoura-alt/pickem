@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Roommate Pick'em Showdown</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Permanent+Marker&family=Inter:wght@400;500;600;800&display=swap" rel="stylesheet">
 <style>
 :root{
   --bg:#0a0f1e;--panel:#121a2e;--panel2:#18223c;--line:#253054;--text:#eef1f8;--muted:#8d97b5;
@@ -124,6 +124,21 @@ tr:last-child td{border-bottom:0}
 .subs{display:flex;gap:6px;flex-wrap:wrap;margin:-4px 0 12px}
 .subs span{font-size:12px;padding:4px 8px;border-radius:8px;background:var(--panel2);border:1px solid var(--line)}
 .empty{background:var(--panel);border:1px dashed var(--line);border-radius:14px;padding:18px;color:var(--muted);text-align:center}
+.talk{display:grid;gap:8px}
+.quip{display:flex;gap:10px;align-items:flex-start;padding:11px 13px;border-radius:12px;background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--c);font-size:14.5px;line-height:1.4}
+.quip.hype{background:linear-gradient(90deg,rgba(251,191,36,.10),var(--panel) 60%)}
+.quip.diss{background:linear-gradient(90deg,rgba(239,68,68,.10),var(--panel) 60%)}
+.qic{font-size:18px;line-height:1.2}
+.photo-strip{display:flex;justify-content:center;gap:14px;flex-wrap:wrap;margin:26px 0 6px;padding:6px 0}
+.polaroid{margin:0;background:#f6f2e9;padding:8px 8px 10px;border-radius:3px;box-shadow:0 8px 22px rgba(0,0,0,.45);transform:rotate(var(--r));width:min(30%,210px);min-width:120px;cursor:zoom-in;transition:transform .2s}
+.polaroid:hover{transform:rotate(0) scale(1.04)}
+.polaroid img{display:block;width:100%;aspect-ratio:1/1;object-fit:cover;border-radius:2px}
+.polaroid figcaption{font-family:'Permanent Marker',cursive;color:#1f2937;font-size:clamp(11px,2.6vw,14px);text-align:center;margin-top:7px;line-height:1.2}
+.lightbox{position:fixed;inset:0;background:rgba(0,0,0,.85);display:none;align-items:center;justify-content:center;z-index:20;padding:20px;cursor:zoom-out}
+.lightbox.on{display:flex}
+.lightbox figure{margin:0;max-width:min(92vw,560px)}
+.lightbox img{width:100%;max-height:78vh;object-fit:contain;border-radius:6px}
+.lightbox figcaption{font-family:'Permanent Marker',cursive;color:#fff;text-align:center;font-size:20px;margin-top:10px}
 footer{margin-top:34px;font-size:12px;color:var(--muted);line-height:1.6}
 </style>
 </head>
@@ -145,8 +160,14 @@ footer{margin-top:34px;font-size:12px;color:var(--muted);line-height:1.6}
   <h2 id="lb-h">Leaderboard <small id="lb-sub"></small></h2>
   <div class="board" id="board"></div>
 
+  <h2>🎙️ Locker Room <small>hype & trash talk, written by the results</small></h2>
+  <div class="talk" id="talk"></div>
+  <div class="photo-strip"></div>
+
   <h2>Trophy Case <small>this week's superlatives</small></h2>
   <div class="awards" id="awards"></div>
+
+  <div class="photo-strip"></div>
 
   <h2>The Picks <small>vs the betting odds</small></h2>
   <div class="legend">
@@ -156,6 +177,8 @@ footer{margin-top:34px;font-size:12px;color:var(--muted);line-height:1.6}
     <span>🐶 underdog pick</span><span>🐺 lone wolf (only one on that side)</span>
   </div>
   <div class="games" id="games"></div>
+
+  <div class="photo-strip"></div>
 
   <h2>Hive Mind Meter <small>% of games each pair picked the same</small></h2>
   <div class="tbl"><table id="agree"></table></div>
@@ -167,6 +190,7 @@ footer{margin-top:34px;font-size:12px;color:var(--muted);line-height:1.6}
   <footer id="foot"></footer>
 </div>
 <div class="tip" id="tip"></div>
+<div class="lightbox" id="lightbox"><figure><img id="lb-img" alt=""><figcaption id="lb-cap"></figcaption></figure></div>
 
 <script>
 /* ===== settings ===== */
@@ -303,6 +327,7 @@ function render(){
     $("prog").style.width = "0%";
     const msg = '<div class="empty">No picks yet this week. Make yours above! 👆</div>';
     $("board").innerHTML = msg; $("awards").innerHTML = msg; $("games").innerHTML = msg;
+    renderTalk(w, weekStats(w));
     renderSeason();
     return;
   }
@@ -323,7 +348,8 @@ function render(){
   $("lb-sub").textContent = allDone ? "final" : "live — projected wins & odds to take the week update as games finish";
   $("board").innerHTML = order.map((p, i) => {
     const S = st[p.id];
-    const crown = decided && S.correct === topCorrect ? '<span class="crown">👑</span>' : "";
+    const botCorrect = st[order[order.length-1].id].correct;
+    const crown = decided >= 3 && topCorrect > botCorrect ? (S.correct === topCorrect ? '<span class="crown">👑</span>' : S.correct === botCorrect ? '<span class="crown">🤡</span>' : "") : "";
     return `<div class="pcard" style="--c:${p.color}">
       <div class="rank">#${i+1}</div>
       <div class="who"><div class="avatar">${p.id}</div><div class="pname">${p.name} ${crown}</div></div>
@@ -334,6 +360,8 @@ function render(){
       <div class="oddsbar"><i style="width:${sim[p.id]*100}%"></i></div>
     </div>`;
   }).join("");
+
+  renderTalk(w, st);
 
   // awards
   const A = [];
@@ -419,6 +447,141 @@ function render(){
     el.onmouseleave = () => tip.style.opacity = 0;
   });
 }
+
+/* ---------- locker room: hype & trash talk ---------- */
+const LINES = {
+  lead: [
+    "{name} is cooking at {rec}. Somebody check his phone for a Vegas app.",
+    "{name} sits at {rec} and is already rehearsing his trophy speech.",
+    "{name} at {rec}. That's film study. Everyone else is just guessing.",
+    "{name} is {rec} and walking around the apartment like he owns the place."
+  ],
+  last: [
+    "{name} is dead last at {rec}. A coin flip would be a legitimate upgrade.",
+    "{name} at {rec}. We're starting a GoFundMe for his football knowledge.",
+    "{name} brings up the rear at {rec}. Somebody take the remote away from him.",
+    "{name}, {rec}. Picking with his eyes closed would at least be an excuse."
+  ],
+  upset: [
+    "{name} called {team} at {pct} to win. Pure ball knowledge. 🔮",
+    "{name} rode {team} as a {pct} underdog and cashed. Vegas wants a word.",
+    "{team} at {pct}? {name} saw it coming. Nobody else did."
+  ],
+  choke: [
+    "{name} had {team} at {pct} to win and STILL lost. Generational fumble.",
+    "{name} took {team}, a {pct} favorite, and got cooked by {opp}. Missed a layup.",
+    "{team} were {pct} to win. {name} found the one timeline where they didn't."
+  ],
+  loneRight: [
+    "{name} stood alone on {team} and was RIGHT. Frame it.",
+    "The whole apartment faded {team}. {name} didn't. Respect."
+  ],
+  loneWrong: [
+    "{name} went against everyone on {team}… and lost. Humbling.",
+    "{name} was the only one on {team}. Turns out there was a reason."
+  ],
+  allWrong: [
+    "Everyone took {loser}. {winner} won. The entire apartment is a fraud.",
+    "The whole apartment rode {loser}. {winner} won. Embarrassing for the household."
+  ],
+  noPicks: [
+    "{name} still hasn't made a single pick. Scared?",
+    "{name}: 0 picks in. Ducking smoke.",
+    "Still waiting on {name}'s picks. Clock's ticking."
+  ],
+  perfect: [
+    "{name} is a perfect {n}-0 this week. Don't talk to him. Don't breathe on him.",
+    "{name} hasn't missed yet ({n}-0). Someone go jinx him."
+  ],
+  lucky: [
+    "{name} is +{x} wins over what the odds say. Living on borrowed luck. 🍀",
+    "{name} is running +{x} hot. The bill always comes due."
+  ],
+  unlucky: [
+    "{name} is {x} wins below expectation. The football gods owe him money.",
+    "{name}'s picks were smart. The results ({x} vs expected) were not. Brutal."
+  ],
+  champ: ["👑 {name} wins Week {wk} at {rec}. Bow down."],
+  cellar: ["🧽 {name} finishes Week {wk} in last at {rec}. Dishes are on you, champ."]
+};
+const hashStr = s => { let h = 7; for (const c of s) h = (h * 31 + c.charCodeAt(0)) | 0; return h >>> 0; };
+
+function lockerRoom(w, st){
+  const out = [];
+  const add = (kind, key, vars, p, prio) => {
+    const arr = LINES[key];
+    const text = arr[hashStr(key + (p ? p.id : "") + (vars.team || "") + w.week) % arr.length].replace(/\{(\w+)\}/g, (_, k) => vars[k]);
+    out.push({kind, text, p, prio});
+  };
+  const decided = w.games.filter(g => g.winner != null);
+  const done = w.games.length && decided.length === w.games.length;
+  const order = [...PLAYERS].sort((a, b) => st[b.id].correct - st[a.id].correct || st[b.id].projected - st[a.id].projected);
+  const rec = p => `${st[p.id].correct}-${st[p.id].wrong}`;
+  if (decided.length >= 3){
+    const top = st[order[0].id].correct, bot = st[order[order.length-1].id].correct;
+    if (top > bot){
+      order.filter(p => st[p.id].correct === top).forEach(p => add("hype", done ? "champ" : "lead", {name:p.name, rec:rec(p), wk:w.week}, p, 0));
+      order.filter(p => st[p.id].correct === bot).forEach(p => add("diss", done ? "cellar" : "last", {name:p.name, rec:rec(p), wk:w.week}, p, 0));
+    }
+  }
+  decided.forEach(g => {
+    const pickers = PLAYERS.filter(p => g.picks[p.id]);
+    if (pickers.length >= 3 && g.winner && pickers.every(p => g.picks[p.id] !== g.winner))
+      add("diss", "allWrong", {winner: tm(g, g.winner), loser: tm(g, 3 - g.winner), team: g.key}, null, 1);
+    pickers.forEach(p => {
+      const s = g.picks[p.id], pr = pSide(g, s), right = g.winner === s;
+      const lone = pickers.length >= 3 && pickers.filter(q => g.picks[q.id] === s).length === 1;
+      const v = {name:p.name, team:tm(g, s), opp:tm(g, 3 - s), pct:pct(pr)};
+      if (right && pr < 0.4) add("hype", "upset", v, p, 1 + pr);
+      else if (!right && g.winner && pr >= 0.7) add("diss", "choke", v, p, 2 - pr);
+      else if (lone && right) add("hype", "loneRight", v, p, 3);
+      else if (lone && !right && g.winner) add("diss", "loneWrong", v, p, 3);
+    });
+  });
+  PLAYERS.forEach(p => {
+    const S = st[p.id];
+    if (S.correct >= 4 && S.wrong === 0) add("hype", "perfect", {name:p.name, n:S.correct}, p, 1);
+    if (decided.length >= 5 && S.luck >= 1.5) add("diss", "lucky", {name:p.name, x:fmt1(S.luck)}, p, 4);
+    if (decided.length >= 5 && S.luck <= -1.5) add("hype", "unlucky", {name:p.name, x:fmt1(S.luck)}, p, 4);
+  });
+  const open = (w.all || []).filter(g => g.state === "pre");
+  if (open.length) PLAYERS.forEach(p => { if (!open.some(g => g.picks[p.id]) && !w.all.some(g => g.picks[p.id])) add("diss", "noPicks", {name:p.name}, p, 0.5); });
+  return out.sort((a, b) => a.prio - b.prio).slice(0, 8);
+}
+
+function renderTalk(w, st){
+  const L = lockerRoom(w, st);
+  $("talk").innerHTML = L.length ? L.map(l => `<div class="quip ${l.kind}" style="--c:${l.p ? l.p.color : "#94a3b8"}">
+      <span class="qic">${l.kind === "hype" ? "🔥" : "🗑️"}</span><span>${esc(l.text)}</span></div>`).join("")
+    : '<div class="empty">Nothing to talk about yet. Give it a few games. 🍿</div>';
+}
+
+/* ---------- photo wall ---------- */
+const PHOTOS = [
+  ["photos/1.jpg", "When your pick shows up but your team doesn't"],
+  ["photos/2.jpg", "Locked and loaded on a 16% underdog"],
+  ["photos/3.jpg", "The price of picking the Saints"],
+  ["photos/4.jpg", "The war room on draft night"],
+  ["photos/5.jpg", "Watching his team punt on 4th & 1"],
+  ["photos/6.jpg", "Up 3 games with 2 to play"],
+  ["photos/7.jpg", "Eating his words after Week 10"],
+  ["photos/8.jpg", "Checking for a pulse in his pick record"],
+  ["photos/9.jpg", "Weekly champion coronation ceremony"]
+];
+function renderPhotos(){
+  const ph = [...PHOTOS].sort(() => Math.random() - 0.5);
+  document.querySelectorAll(".photo-strip").forEach((el, i) => {
+    el.innerHTML = ph.slice(i * 3, i * 3 + 3).map(([src, cap], j) => {
+      const r = ((hashStr(src) % 9) - 4) * 1.1;
+      return `<figure class="polaroid" style="--r:${r}deg" data-src="${src}" data-cap="${esc(cap)}"><img src="${src}" alt="" loading="lazy"><figcaption>${esc(cap)}</figcaption></figure>`;
+    }).join("");
+  });
+  document.querySelectorAll(".polaroid").forEach(f => f.onclick = () => {
+    $("lb-img").src = f.dataset.src; $("lb-cap").textContent = f.dataset.cap; $("lightbox").classList.add("on");
+  });
+  $("lightbox").onclick = () => $("lightbox").classList.remove("on");
+}
+renderPhotos();
 
 /* ---------- data: ESPN scores + shared picks database ---------- */
 const ALIAS = {WSH:"WAS", LA:"LAR", JAC:"JAX"};
