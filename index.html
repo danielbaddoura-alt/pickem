@@ -105,6 +105,25 @@ tr:last-child td{border-bottom:0}
 .legend span{display:inline-flex;align-items:center;gap:6px}
 .sw{width:12px;height:12px;border-radius:4px;display:inline-block}
 .tip{position:fixed;pointer-events:none;background:#000c;color:#fff;font-size:12px;padding:6px 8px;border-radius:8px;opacity:0;transition:opacity .1s;z-index:9}
+.picker{background:linear-gradient(160deg,#1a2547,#121a2e);border:1px solid #2f3d6b;border-radius:18px;padding:16px 14px;margin-top:18px}
+.picker h3{font-family:'Bebas Neue',Impact,sans-serif;font-weight:400;font-size:28px;margin:0 0 4px;letter-spacing:.5px}
+.picker .hint{font-size:13px;color:var(--muted);margin-bottom:12px}
+.who-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.who-btn{flex:1;min-width:70px;padding:10px 8px;border-radius:12px;border:2px solid var(--line);background:var(--panel2);color:var(--text);font:700 14px Inter;cursor:pointer}
+.who-btn.on{border-color:var(--c);background:color-mix(in srgb,var(--c) 22%,transparent)}
+.prow{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;position:relative}
+.prow .when{grid-column:1/-1;font-size:11px;color:var(--muted);margin:6px 0 -2px;text-transform:uppercase;letter-spacing:.06em}
+.tbtn{padding:12px 8px;border-radius:12px;border:2px solid var(--line);background:var(--panel);color:var(--text);font:800 16px Inter;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px}
+.tbtn small{font:500 11px Inter;color:var(--muted)}
+.tbtn.on{border-color:var(--gold);background:rgba(251,191,36,.16)}
+.tbtn:disabled{opacity:.45;cursor:default}
+.savebar{position:sticky;bottom:10px;display:flex;gap:10px;align-items:center;margin-top:12px;background:#0a0f1ee6;padding:10px;border-radius:14px;border:1px solid var(--line)}
+.savebtn{flex:1;padding:14px;border:0;border-radius:12px;background:var(--gold);color:#1a1300;font:800 16px Inter;cursor:pointer}
+.savebtn:disabled{opacity:.5}
+.savemsg{font-size:13px;color:var(--muted);min-width:90px;text-align:right}
+.subs{display:flex;gap:6px;flex-wrap:wrap;margin:-4px 0 12px}
+.subs span{font-size:12px;padding:4px 8px;border-radius:8px;background:var(--panel2);border:1px solid var(--line)}
+.empty{background:var(--panel);border:1px dashed var(--line);border-radius:14px;padding:18px;color:var(--muted);text-align:center}
 footer{margin-top:34px;font-size:12px;color:var(--muted);line-height:1.6}
 </style>
 </head>
@@ -120,6 +139,8 @@ footer{margin-top:34px;font-size:12px;color:var(--muted);line-height:1.6}
   <div class="weekmeta" id="weekmeta"></div>
   <div class="progress"><i id="prog"></i></div>
   <div class="weekmeta" id="sync"></div>
+
+  <section id="picker" class="picker"></section>
 
   <h2 id="lb-h">Leaderboard <small id="lb-sub"></small></h2>
   <div class="board" id="board"></div>
@@ -147,8 +168,18 @@ footer{margin-top:34px;font-size:12px;color:var(--muted);line-height:1.6}
 </div>
 <div class="tip" id="tip"></div>
 
-<script src="picks.js"></script>
 <script>
+/* ===== settings ===== */
+const SEASON = 2026;
+const DB = "https://roommate-pickem-default-rtdb.firebaseio.com/pickem";
+const PLAYERS = [
+  {id:"D", name:"Danny", color:"#f472b6"},
+  {id:"E", name:"Ethan", color:"#38bdf8"},
+  {id:"C", name:"Chris", color:"#fbbf24"},
+  {id:"M", name:"Mike",  color:"#4ade80"}
+];
+const NOTES = {10: "Missed Thursday night and the Munich game. Week 10 odds: bet365 via FOX Sports."};
+let WEEKS = [];
 const TEAM_COLORS = {MIN:"#4F2683",GB:"#203731",BUF:"#00338D",NYJ:"#125740",KC:"#E31837",ATL:"#A71930",HOU:"#03202F",CLE:"#FF3C00",
   JAX:"#006778",TEN:"#4B92DB",MIA:"#008E97",IND:"#002C5F",CAR:"#0085CA",NO:"#D3BC8D",SEA:"#69BE28",LV:"#A5ACAF",LAR:"#003594",
   ARI:"#97233F",SF:"#AA0000",DAL:"#869397",PIT:"#FFB612",CIN:"#FB4F14",LAC:"#0080C6",BAL:"#241773"};
@@ -228,8 +259,53 @@ function agreement(weeks){
 
 let current = WEEKS.length - 1;
 
+function renderSeason(){
+  // agreement matrix (season)
+  const agS = agreement(WEEKS);
+  let h = "<tr><th></th>" + PLAYERS.map(p => `<th>${p.name}</th>`).join("") + "</tr>";
+  PLAYERS.forEach(a => {
+    h += `<tr><td><span class="dot" style="--c:${a.color}"></span>${a.name}</td>`;
+    PLAYERS.forEach(b => {
+      if (a.id === b.id){ h += "<td style='color:var(--muted)'>—</td>"; return; }
+      const x = agS[a.id+b.id], r = x.n ? x.same/x.n : 0;
+      h += `<td><span class="heat" style="padding:4px 8px;background:rgba(251,191,36,${(r-0.4)*1.2})">${pct(r)}</span></td>`;
+    });
+    h += "</tr>";
+  });
+  $("agree").innerHTML = h;
+
+  // season
+  const season = {};
+  PLAYERS.forEach(p => season[p.id] = {w:0, l:0, exp:0, weeks:0, dogs:0, chalkSum:0, n:0});
+  WEEKS.forEach(wk => {
+    const s = weekStats(wk);
+    const done = wk.games.every(g => g.winner != null);
+    const top = Math.max(...PLAYERS.map(p => s[p.id].correct));
+    PLAYERS.forEach(p => { const S = season[p.id], x = s[p.id];
+      S.w += x.correct; S.l += x.wrong; S.exp += x.exp; S.dogs += x.dogHits; S.chalkSum += x.chalk * x.n; S.n += x.n;
+      if (done && x.correct === top) S.weeks++; });
+  });
+  const so = [...PLAYERS].sort((a, b) => season[b.id].w - season[a.id].w || season[a.id].l - season[b.id].l);
+  let t = "<tr><th>Player</th><th>W–L</th><th>Win %</th><th>Weeks won</th><th>Upsets hit</th><th>Chalk %</th><th>Luck</th></tr>";
+  so.forEach(p => { const S = season[p.id], g = S.w + S.l, luck = S.w - S.exp;
+    t += `<tr><td><span class="dot" style="--c:${p.color}"></span><b>${p.name}</b></td><td>${S.w}–${S.l}</td><td>${g ? pct(S.w/g) : "—"}</td><td>${S.weeks}</td><td>${S.dogs}</td><td>${S.n ? pct(S.chalkSum/S.n) : "—"}</td><td class="${g ? (luck >= 0 ? "pos" : "neg") : ""}">${g ? signed(luck) : "—"}</td></tr>`; });
+  $("season").innerHTML = t;
+
+}
+
 function render(){
   const w = WEEKS[current];
+  renderPicker(w);
+  if (!w.games.length){
+    $("tabs").innerHTML = WEEKS.map((x, i) => `<button class="tab ${i===current?"on":""}" data-i="${i}">Week ${x.week}</button>`).join("");
+    $("tabs").querySelectorAll(".tab").forEach(b => b.onclick = () => { current = +b.dataset.i; render(); });
+    $("weekmeta").textContent = `Week ${w.week}: no picks in yet`;
+    $("prog").style.width = "0%";
+    const msg = '<div class="empty">No picks yet this week. Make yours above! 👆</div>';
+    $("board").innerHTML = msg; $("awards").innerHTML = msg; $("games").innerHTML = msg;
+    renderSeason();
+    return;
+  }
   const st = weekStats(w);
   const sim = simulate(w);
   const decided = w.games.filter(g => g.winner != null).length;
@@ -238,7 +314,7 @@ function render(){
   // tabs
   $("tabs").innerHTML = WEEKS.map((x, i) => `<button class="tab ${i===current?"on":""}" data-i="${i}">Week ${x.week}</button>`).join("");
   $("tabs").querySelectorAll(".tab").forEach(b => b.onclick = () => { current = +b.dataset.i; render(); });
-  $("weekmeta").textContent = `Week ${w.week}: ${decided} of ${w.games.length} games decided` + (w.note ? ` · ${w.note}` : "");
+  $("weekmeta").textContent = `Week ${w.week}: ${decided} of ${w.games.length} games decided` + (NOTES[w.week] ? ` · ${NOTES[w.week]}` : "");
   $("prog").style.width = (decided / w.games.length * 100) + "%";
 
   // leaderboard
@@ -274,14 +350,14 @@ function render(){
   if (st[lone[0]].lone > 0) A.push({ic:"🐺", t:"Lone Wolf", v:names(lone), d:`Went against the whole apartment ${st[lone[0]].lone} time${st[lone[0]].lone>1?"s":""}.`});
   const ag = agreement([w]);
   let hi = null, lo = null;
-  PLAYERS.forEach((a, i) => PLAYERS.slice(i+1).forEach(b => { const x = ag[a.id+b.id], r = x.same/x.n;
+  PLAYERS.forEach((a, i) => PLAYERS.slice(i+1).forEach(b => { const x = ag[a.id+b.id], r = x.n ? x.same/x.n : 0;
     if (!hi || r > hi.r) hi = {a, b, r, x}; if (!lo || r < lo.r) lo = {a, b, r, x}; }));
   A.push({ic:"👯", t:"Hive Mind", v:`${hi.a.name} & ${hi.b.name}`, d:`Same pick in ${hi.x.same} of ${hi.x.n} games. Are you two sharing a brain?`});
   A.push({ic:"🥊", t:"Odd Couple", v:`${lo.a.name} & ${lo.b.name}`, d:`Agreed on only ${lo.x.same} of ${lo.x.n}. Someone's going to be insufferable.`});
-  const civil = w.games.filter(g => { const c = PLAYERS.filter(p => g.picks[p.id] === 1).length; return c === 2; });
-  const unan = w.games.filter(g => { const c = PLAYERS.filter(p => g.picks[p.id] === 1).length; return c === 0 || c === 4; });
+  const civil = w.games.filter(g => { const c = PLAYERS.filter(p => g.picks[p.id] === 1).length; return Object.keys(g.picks).length === 4 && c === 2; });
+  const unan = w.games.filter(g => { const n = Object.keys(g.picks).length, c = PLAYERS.filter(p => g.picks[p.id] === 1).length; return n >= 2 && (c === 0 || c === n); });
   A.push({ic:"⚔️", t:"Civil Wars", v:`${civil.length} games split 2–2`, d: civil.length ? civil.map(g => `${g.t1}@${g.t2}`).join(", ") + ". These decide the week." : "Nobody's fighting this week."});
-  A.push({ic:"🤝", t:"Group Locks", v:`${unan.length} unanimous`, d: unan.length ? unan.map(g => tm(g, g.picks.D)).join(", ") + ". If these lose, everyone suffers." : "Not one game everyone agreed on."});
+  A.push({ic:"🤝", t:"Group Locks", v:`${unan.length} unanimous`, d: unan.length ? unan.map(g => tm(g, Object.values(g.picks)[0])).join(", ") + ". If these lose, everyone suffers." : "Not one game everyone agreed on."});
   const perf = leaders(st, "perfect", 1);
   A.push({ic:"🎯", t:"Perfect-Week Odds", v: st[perf[0]].perfect > 0 ? `${names(perf)}: 1 in ${Math.round(1/st[perf[0]].perfect).toLocaleString()}` : "Dead for everyone",
     d: st[perf[0]].perfect > 0 ? "Best shot at going 100% if the odds are right." : "Everyone has at least one miss. Perfection is a myth."});
@@ -308,11 +384,13 @@ function render(){
   $("games").innerHTML = w.games.map(g => {
     const pa = p1(g), c1 = PLAYERS.filter(p => g.picks[p.id] === 1).length;
     const tags = [];
-    if (c1 === 2) tags.push('<span class="tag civil">2–2 split</span>');
-    if (c1 === 0 || c1 === 4) tags.push('<span class="tag lock">unanimous</span>');
+    if (Object.keys(g.picks).length === 4 && c1 === 2) tags.push('<span class="tag civil">2–2 split</span>');
+    if (Object.keys(g.picks).length >= 2 && (c1 === 0 || c1 === Object.keys(g.picks).length)) tags.push('<span class="tag lock">unanimous</span>');
     const st8 = g.winner == null ? `<span class="status ${g.live?"live":""}">${esc(g.live || g.kick || "Scheduled")}</span>` : `<span class="status final">Final${g.score ? " · " + esc(g.score) : ""}</span>`;
     const picks = PLAYERS.map(p => {
-      const s = g.picks[p.id]; const pr = pSide(g, s);
+      const s = g.picks[p.id];
+      if (!s) return `<div class="pick" style="box-shadow:inset 0 3px 0 ${p.color};opacity:.45"><div class="ini">${p.name}</div><div class="tm">—</div><div class="pp">no pick</div></div>`;
+      const pr = pSide(g, s);
       const cls = g.winner == null ? (g.liveScore && g.liveScore[0] !== g.liveScore[1] ? ((g.liveScore[0] > g.liveScore[1]) === (s === 1) ? "lead" : "trail") : "") : (g.winner === s ? "win" : "loss");
       const lone = PLAYERS.filter(q => g.picks[q.id] === s).length === 1;
       const badge = (lone ? "🐺" : "") + (pr < 0.5 ? "🐶" : "");
@@ -331,38 +409,8 @@ function render(){
     </div>`;
   }).join("");
 
-  // agreement matrix (season)
-  const agS = agreement(WEEKS);
-  let h = "<tr><th></th>" + PLAYERS.map(p => `<th>${p.name}</th>`).join("") + "</tr>";
-  PLAYERS.forEach(a => {
-    h += `<tr><td><span class="dot" style="--c:${a.color}"></span>${a.name}</td>`;
-    PLAYERS.forEach(b => {
-      if (a.id === b.id){ h += "<td style='color:var(--muted)'>—</td>"; return; }
-      const x = agS[a.id+b.id], r = x.n ? x.same/x.n : 0;
-      h += `<td><span class="heat" style="padding:4px 8px;background:rgba(251,191,36,${(r-0.4)*1.2})">${pct(r)}</span></td>`;
-    });
-    h += "</tr>";
-  });
-  $("agree").innerHTML = h;
-
-  // season
-  const season = {};
-  PLAYERS.forEach(p => season[p.id] = {w:0, l:0, exp:0, weeks:0, dogs:0, chalkSum:0, n:0});
-  WEEKS.forEach(wk => {
-    const s = weekStats(wk);
-    const done = wk.games.every(g => g.winner != null);
-    const top = Math.max(...PLAYERS.map(p => s[p.id].correct));
-    PLAYERS.forEach(p => { const S = season[p.id], x = s[p.id];
-      S.w += x.correct; S.l += x.wrong; S.exp += x.exp; S.dogs += x.dogHits; S.chalkSum += x.chalk * x.n; S.n += x.n;
-      if (done && x.correct === top) S.weeks++; });
-  });
-  const so = [...PLAYERS].sort((a, b) => season[b.id].w - season[a.id].w || season[a.id].l - season[b.id].l);
-  let t = "<tr><th>Player</th><th>W–L</th><th>Win %</th><th>Weeks won</th><th>Upsets hit</th><th>Chalk %</th><th>Luck</th></tr>";
-  so.forEach(p => { const S = season[p.id], g = S.w + S.l, luck = S.w - S.exp;
-    t += `<tr><td><span class="dot" style="--c:${p.color}"></span><b>${p.name}</b></td><td>${S.w}–${S.l}</td><td>${g ? pct(S.w/g) : "—"}</td><td>${S.weeks}</td><td>${S.dogs}</td><td>${S.n ? pct(S.chalkSum/S.n) : "—"}</td><td class="${g ? (luck >= 0 ? "pos" : "neg") : ""}">${g ? signed(luck) : "—"}</td></tr>`; });
-  $("season").innerHTML = t;
-
-  $("foot").innerHTML = `Odds: ${esc(w.odds || "ESPN moneylines")}. Percentages are moneylines with the bookmaker's cut removed. "Odds to win the week" simulates the remaining games 20,000 times using those odds (ties split the credit).<br>Scores update live from ESPN while this page is open. Picks: edit picks.js.`;
+  renderSeason();
+  $("foot").innerHTML = `Odds: ${esc(NOTES[w.week] ? "bet365 via FOX Sports" : "ESPN moneylines, saved when picks were made")}. Percentages are moneylines with the bookmaker's cut removed. "Odds to win the week" simulates the remaining games 20,000 times using those odds (ties split the credit).<br>Scores update live from ESPN while this page is open. Picks lock when each game kicks off.`;
 
   // tooltips
   const tip = $("tip");
@@ -372,51 +420,156 @@ function render(){
   });
 }
 
-/* ---------- live scores from ESPN ---------- */
+/* ---------- data: ESPN scores + shared picks database ---------- */
 const ALIAS = {WSH:"WAS", LA:"LAR", JAC:"JAX"};
 const norm = a => ALIAS[a] || a;
-let lastSync = null, syncErr = false;
+let STORE = {}, ESPN = {}, CURRENT = null, lastSync = null, syncErr = false, firstLoad = true;
+let me = null, draft = {}, saving = false, saveMsg = "";
+try { me = localStorage.getItem("pickem-me"); } catch (e) {}
 
-async function loadWeek(w){
-  const url = `https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?dates=${SEASON}&seasontype=2&week=${w.week}`;
+async function fetchEspn(week){
+  const url = "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?" +
+    (week ? `dates=${SEASON}&seasontype=2&week=${week}` : "");
   const r = await fetch(url, {cache:"no-store"});
   if (!r.ok) throw new Error("ESPN " + r.status);
   const j = await r.json();
-  const map = {};
-  (j.events || []).forEach(ev => {
+  const games = (j.events || []).map(ev => {
     const c = ev.competitions[0];
     const home = c.competitors.find(x => x.homeAway === "home"), away = c.competitors.find(x => x.homeAway === "away");
     const st = (c.status || ev.status).type;
     const o = (c.odds || [])[0] || {};
-    map[norm(away.team.abbreviation) + "@" + norm(home.team.abbreviation)] = {
-      state: st.state, detail: st.shortDetail, as: +away.score, hs: +home.score,
-      mlA: o.awayTeamOdds && o.awayTeamOdds.moneyLine, mlH: o.homeTeamOdds && o.homeTeamOdds.moneyLine };
-  });
-  w.games.forEach(g => {
-    let m = map[g.t1 + "@" + g.t2], flip = false;
-    if (!m){ m = map[g.t2 + "@" + g.t1]; flip = true; }
-    if (!m) return;
-    const s1 = flip ? m.hs : m.as, s2 = flip ? m.as : m.hs;
-    if (g.ml1 == null && m.mlA != null && m.mlH != null){ g.ml1 = flip ? m.mlH : m.mlA; g.ml2 = flip ? m.mlA : m.mlH; g.espnOdds = true; }
-    g.live = null; g.liveScore = null;
-    if (m.state === "post"){ g.winner = s1 > s2 ? 1 : s2 > s1 ? 2 : 0; g.score = `${s1}-${s2}`; }
-    else if (m.state === "in"){ g.winner = null; g.live = `${m.detail} · ${g.t1} ${s1}, ${g.t2} ${s2}`; g.liveScore = [s1, s2]; }
-    else { g.winner = null; g.kick = m.detail; }
+    const t1 = norm(away.team.abbreviation), t2 = norm(home.team.abbreviation);
+    return { key: t1 + "@" + t2, t1, t2, date: ev.date, state: st.state, detail: st.shortDetail,
+      s1: +away.score || 0, s2: +home.score || 0,
+      mlA: o.awayTeamOdds && o.awayTeamOdds.moneyLine != null ? +o.awayTeamOdds.moneyLine : null,
+      mlH: o.homeTeamOdds && o.homeTeamOdds.moneyLine != null ? +o.homeTeamOdds.moneyLine : null };
+  }).sort((a, b) => a.date.localeCompare(b.date));
+  return { week: j.week && j.week.number, seasonType: j.season && j.season.type, games };
+}
+
+async function fetchStore(){
+  const r = await fetch(DB + ".json", {cache:"no-store"});
+  if (!r.ok) throw new Error("DB " + r.status);
+  return (await r.json()) || {};
+}
+
+function buildWeeks(){
+  const sw = STORE.weeks || {};
+  const nums = new Set(Object.keys(sw).map(Number));
+  if (CURRENT) nums.add(CURRENT);
+  WEEKS = [...nums].sort((a, b) => a - b).map(wn => {
+    const W = sw[wn] || {}, picksBy = W.picks || {}, odds = W.odds || {};
+    const all = ESPN[wn] || [];
+    const games = all.map(e => {
+      const picks = {};
+      PLAYERS.forEach(p => { const v = (picksBy[p.id] || {})[e.key]; if (v === 1 || v === 2) picks[p.id] = v; });
+      const o = odds[e.key];
+      return { key: e.key, t1: e.t1, t2: e.t2, picks, date: e.date, state: e.state,
+        ml1: o ? o[0] : e.mlA, ml2: o ? o[1] : e.mlH,
+        winner: e.state === "post" ? (e.s1 > e.s2 ? 1 : e.s2 > e.s1 ? 2 : 0) : null,
+        score: e.state === "post" ? `${e.s1}-${e.s2}` : null,
+        live: e.state === "in" ? `${e.detail} · ${e.t1} ${e.s1}, ${e.t2} ${e.s2}` : null,
+        liveScore: e.state === "in" ? [e.s1, e.s2] : null,
+        kick: e.state === "pre" ? e.detail : null };
+    });
+    return { week: wn, all: games, games: games.filter(g => Object.keys(g.picks).length) };
   });
 }
 
-async function sync(){
-  try { await Promise.all(WEEKS.map(loadWeek)); lastSync = new Date(); syncErr = false; }
-  catch (e) { syncErr = true; }
-  WEEKS.forEach(w => w.games.forEach(g => { if (g.winner === undefined) g.winner = null; }));
-  render();
-  const anyLive = WEEKS.some(w => w.games.some(g => g.live));
-  $("sync").textContent = syncErr ? "⚠️ Couldn't reach ESPN for scores. Retrying shortly."
-    : `🟢 Live from ESPN · updated ${lastSync.toLocaleTimeString([], {hour:"numeric", minute:"2-digit"})}` + (anyLive ? " · refreshing every minute" : "");
-  setTimeout(sync, anyLive || syncErr ? 60000 : 300000);
+/* ---------- pick entry ---------- */
+function renderPicker(w){
+  const el = $("picker");
+  const open = w.all.filter(g => g.state === "pre");
+  const subs = PLAYERS.map(p => {
+    const n = w.all.filter(g => g.picks[p.id]).length;
+    return `<span style="border-color:${p.color}">${p.name} ${n ? "✅ " + n : "— 0"}/${w.all.length}</span>`;
+  }).join("");
+  let h = `<h3>🏈 Make your picks · Week ${w.week}</h3>`;
+  if (!open.length){
+    el.innerHTML = h + `<div class="hint">Every Week ${w.week} game has kicked off, so picks are locked.</div><div class="subs">${subs}</div>`;
+    return;
+  }
+  h += `<div class="hint">Tap who you are, then tap the team you think wins each game. Each game locks at kickoff. You can change picks until then.</div>`;
+  h += `<div class="subs">${subs}</div>`;
+  h += `<div class="who-row">` + PLAYERS.map(p => `<button class="who-btn ${me===p.id?"on":""}" style="--c:${p.color}" data-me="${p.id}">${p.name}</button>`).join("") + `</div>`;
+  if (me){
+    let lastDay = "";
+    w.all.forEach(g => {
+      const locked = g.state !== "pre";
+      const cur = draft[g.key] || g.picks[me];
+      const day = new Date(g.date).toLocaleDateString([], {weekday:"short", month:"short", day:"numeric"});
+      const time = new Date(g.date).toLocaleTimeString([], {hour:"numeric", minute:"2-digit"});
+      const p1v = p1(g);
+      const btn = (side, team, pr) => `<button class="tbtn ${cur===side?"on":""}" data-k="${g.key}" data-s="${side}" ${locked?"disabled":""}>${team}<small>${g.ml1==null?"":pct(pr)+" to win"}</small></button>`;
+      h += `<div class="prow"><div class="when">${day !== lastDay ? day + " · " : ""}${time}${locked ? " · 🔒 locked" + (g.picks[me] ? "" : " (no pick)") : ""}</div>${btn(1, g.t1, p1v)}${btn(2, "@ " + g.t2, 1 - p1v)}</div>`;
+      lastDay = day;
+    });
+    const changed = Object.keys(draft).length;
+    h += `<div class="savebar"><button class="savebtn" id="savebtn" ${!changed || saving ? "disabled" : ""}>${saving ? "Saving…" : changed ? `Save ${changed} pick${changed>1?"s":""}` : "All picks saved"}</button><span class="savemsg">${esc(saveMsg)}</span></div>`;
+  }
+  el.innerHTML = h;
+  el.querySelectorAll("[data-me]").forEach(b => b.onclick = () => {
+    me = b.dataset.me; draft = {}; saveMsg = "";
+    try { localStorage.setItem("pickem-me", me); } catch (e) {}
+    renderPicker(w);
+  });
+  el.querySelectorAll(".tbtn").forEach(b => b.onclick = () => {
+    const k = b.dataset.k, side = +b.dataset.s, g = w.all.find(x => x.key === k);
+    if (g.picks[me] === side) delete draft[k]; else draft[k] = side;
+    saveMsg = ""; renderPicker(w);
+  });
+  const sb = $("savebtn");
+  if (sb) sb.onclick = () => savePicks(w);
 }
-WEEKS.forEach(w => w.games.forEach(g => { if (g.winner === undefined) g.winner = null; }));
-render();
+
+async function savePicks(w){
+  if (!me || saving) return;
+  const body = {}, oddsToSave = [];
+  Object.entries(draft).forEach(([k, side]) => {
+    const g = w.all.find(x => x.key === k);
+    if (!g || g.state !== "pre") return;            // locked since you tapped
+    body[k] = side;
+    const W = (STORE.weeks || {})[w.week] || {};
+    if (!(W.odds || {})[k] && g.ml1 != null && g.ml2 != null) oddsToSave.push([k, [g.ml1, g.ml2]]);
+  });
+  if (!Object.keys(body).length){ draft = {}; saveMsg = "Those games already started."; renderPicker(w); return; }
+  saving = true; renderPicker(w);
+  try {
+    const r = await fetch(`${DB}/weeks/${w.week}/picks/${me}.json`, {method:"PATCH", body: JSON.stringify(body)});
+    if (!r.ok) throw new Error(r.status);
+    await Promise.all(oddsToSave.map(([k, v]) => fetch(`${DB}/weeks/${w.week}/odds/${encodeURIComponent(k)}.json`, {method:"PUT", body: JSON.stringify(v)}).catch(() => {})));
+    draft = {}; saveMsg = "Saved ✓";
+  } catch (e) {
+    saveMsg = "Didn't save. Try again.";
+  }
+  saving = false;
+  await sync(true);
+}
+
+/* ---------- refresh loop ---------- */
+let timer = null;
+async function sync(once){
+  clearTimeout(timer);
+  try {
+    const cur = await fetchEspn(null);
+    if (cur.seasonType === 2 && cur.week){ CURRENT = cur.week; ESPN[cur.week] = cur.games; }
+    STORE = await fetchStore();
+    const need = new Set(Object.keys(STORE.weeks || {}).map(Number));
+    await Promise.all([...need].filter(n => n !== CURRENT).map(async n => { ESPN[n] = (await fetchEspn(n)).games; }));
+    lastSync = new Date(); syncErr = false;
+  } catch (e) { syncErr = true; }
+  const keepWeek = WEEKS[current] && WEEKS[current].week;
+  buildWeeks();
+  if (!WEEKS.length){ $("sync").textContent = "⚠️ Couldn't load. Check your connection; retrying shortly."; timer = setTimeout(sync, 30000); return; }
+  const idx = WEEKS.findIndex(w => w.week === keepWeek);
+  current = firstLoad || idx < 0 ? Math.max(0, WEEKS.findIndex(w => w.week === CURRENT)) : idx;
+  firstLoad = false;
+  render();
+  const anyLive = WEEKS.some(w => w.all.some(g => g.state === "in"));
+  $("sync").textContent = syncErr ? "⚠️ Couldn't reach the scores or picks. Retrying shortly."
+    : `🟢 Live · updated ${lastSync.toLocaleTimeString([], {hour:"numeric", minute:"2-digit"})}` + (anyLive ? " · refreshing every minute" : "");
+  timer = setTimeout(sync, anyLive || syncErr ? 60000 : 300000);
+}
 sync();
 </script>
 </body>
