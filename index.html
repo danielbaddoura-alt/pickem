@@ -139,6 +139,20 @@ tr:last-child td{border-bottom:0}
 .lightbox figure{margin:0;max-width:min(92vw,560px)}
 .lightbox img{width:100%;max-height:78vh;object-fit:contain;border-radius:6px}
 .lightbox figcaption{font-family:'Permanent Marker',cursive;color:#fff;text-align:center;font-size:20px;margin-top:10px}
+.sub3{font-family:'Bebas Neue',Impact,sans-serif;font-weight:400;font-size:22px;margin:18px 0 8px;color:#cbd5e1}
+.halls{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;margin-top:14px}
+.hall{border-radius:16px;padding:14px;border:1px solid var(--line)}
+.hall h3{font-family:'Bebas Neue',Impact,sans-serif;font-weight:400;font-size:26px;margin:0 0 8px}
+.hall.fame{background:linear-gradient(160deg,rgba(251,191,36,.16),var(--panel))}
+.hall.shame{background:linear-gradient(160deg,rgba(239,68,68,.16),var(--panel))}
+.hrow{display:flex;gap:10px;align-items:baseline;padding:8px 0;border-top:1px solid rgba(255,255,255,.07);font-size:14px}
+.hrow:first-of-type{border-top:0}
+.hrow .wk{font-family:'Bebas Neue';font-size:18px;color:var(--muted);min-width:58px}
+.hrow small{display:block;color:var(--muted);font-size:12px;margin-top:2px}
+.tally{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
+.tally span{font-size:12px;padding:3px 8px;border-radius:8px;background:rgba(0,0,0,.25)}
+.podium{margin:0 0 12px}
+.podium svg{width:100%;max-width:560px;display:block;margin:0 auto}
 footer{margin-top:34px;font-size:12px;color:var(--muted);line-height:1.6}
 </style>
 </head>
@@ -161,8 +175,19 @@ footer{margin-top:34px;font-size:12px;color:var(--muted);line-height:1.6}
   <div class="board" id="board"></div>
 
   <h2>🎙️ Locker Room <small>hype & trash talk, written by the results</small></h2>
+  <div class="podium" id="podium"></div>
   <div class="talk" id="talk"></div>
   <div class="photo-strip"></div>
+
+  <h2>🏆 Season Race <small>every week, all season long</small></h2>
+  <div class="tbl"><table id="season"></table></div>
+  <h3 class="sub3">Week by week</h3>
+  <div class="tbl"><table id="weekgrid"></table></div>
+  <div class="halls">
+    <div class="hall fame"><h3>👑 Hall of Fame</h3><div id="fame"></div></div>
+    <div class="hall shame"><h3>🧽 Hall of Shame</h3><div id="shame"></div></div>
+  </div>
+  <div class="note"><b>Luck</b> = actual wins minus expected wins (the sum of each picked team's win probability in decided games). Positive means you're running hot; negative means the football gods owe you one. <b>Chalk %</b> = average win probability of your picks — high means you ride favorites, low means you love chaos.</div>
 
   <h2>Trophy Case <small>this week's superlatives</small></h2>
   <div class="awards" id="awards"></div>
@@ -183,9 +208,7 @@ footer{margin-top:34px;font-size:12px;color:var(--muted);line-height:1.6}
   <h2>Hive Mind Meter <small>% of games each pair picked the same</small></h2>
   <div class="tbl"><table id="agree"></table></div>
 
-  <h2>Season Standings <small>all weeks combined</small></h2>
-  <div class="tbl"><table id="season"></table></div>
-  <div class="note"><b>Luck</b> = actual wins minus expected wins (the sum of each picked team's win probability in decided games). Positive means you're running hot; negative means the football gods owe you one. <b>Chalk %</b> = average win probability of your picks — high means you ride favorites, low means you love chaos.</div>
+
 
   <footer id="foot"></footer>
 </div>
@@ -303,7 +326,7 @@ function renderSeason(){
   PLAYERS.forEach(p => season[p.id] = {w:0, l:0, exp:0, weeks:0, dogs:0, chalkSum:0, n:0});
   WEEKS.forEach(wk => {
     const s = weekStats(wk);
-    const done = wk.games.every(g => g.winner != null);
+    const done = wk.done;
     const top = Math.max(...PLAYERS.map(p => s[p.id].correct));
     PLAYERS.forEach(p => { const S = season[p.id], x = s[p.id];
       S.w += x.correct; S.l += x.wrong; S.exp += x.exp; S.dogs += x.dogHits; S.chalkSum += x.chalk * x.n; S.n += x.n;
@@ -314,6 +337,38 @@ function renderSeason(){
   so.forEach(p => { const S = season[p.id], g = S.w + S.l, luck = S.w - S.exp;
     t += `<tr><td><span class="dot" style="--c:${p.color}"></span><b>${p.name}</b></td><td>${S.w}–${S.l}</td><td>${g ? pct(S.w/g) : "—"}</td><td>${S.weeks}</td><td>${S.dogs}</td><td>${S.n ? pct(S.chalkSum/S.n) : "—"}</td><td class="${g ? (luck >= 0 ? "pos" : "neg") : ""}">${g ? signed(luck) : "—"}</td></tr>`; });
   $("season").innerHTML = t;
+
+  // week-by-week grid + halls
+  const PUNISH = ["dishes all week","trash duty all week","buying the first round","cleaning the bathroom","wearing the champ's favorite team's jersey to class","cooking Sunday breakfast for the house","posting the pick record on social media","the Sharpie treatment at the next party","vacuuming the whole apartment","calling the champ 'Coach' for a week"];
+  const PERKS = ["best couch seat next Sunday","TV remote control all week","a week off chores","choosing where the house orders food"];
+  let gh = "<tr><th>Player</th>" + WEEKS.map(wk => `<th>Wk ${wk.week}</th>`).join("") + "<th>Total</th></tr>";
+  const per = WEEKS.map(wk => { const s = weekStats(wk), vals = PLAYERS.map(p => s[p.id].correct);
+    return {wk, s, top: Math.max(...vals), bot: Math.min(...vals)}; });
+  const tallies = {}; PLAYERS.forEach(p => tallies[p.id] = {crowns:0, sponges:0});
+  per.forEach(x => { if (x.wk.done && x.top > x.bot) PLAYERS.forEach(p => {
+    if (x.s[p.id].correct === x.top) tallies[p.id].crowns++;
+    if (x.s[p.id].correct === x.bot) tallies[p.id].sponges++; }); });
+  so.forEach(p => {
+    gh += `<tr><td><span class="dot" style="--c:${p.color}"></span><b>${p.name}</b></td>` + per.map(x => {
+      const S = x.s[p.id]; if (!x.wk.games.length) return "<td style='color:var(--muted)'>—</td>";
+      const mark = x.wk.done && x.top > x.bot ? (S.correct === x.top ? " 👑" : S.correct === x.bot ? " 🧽" : "") : "";
+      return `<td>${S.correct}–${S.wrong}${mark}${x.wk.done ? "" : "<small style='color:var(--muted)'>*</small>"}</td>`;
+    }).join("") + `<td><b>${season[p.id].w}–${season[p.id].l}</b></td></tr>`;
+  });
+  $("weekgrid").innerHTML = gh;
+  const doneWeeks = per.filter(x => x.wk.done && x.top > x.bot).reverse();
+  const fameT = `<div class="tally">${[...PLAYERS].sort((a,b)=>tallies[b.id].crowns-tallies[a.id].crowns).map(p => `<span>${p.name} 👑×${tallies[p.id].crowns}</span>`).join("")}</div>`;
+  const shameT = `<div class="tally">${[...PLAYERS].sort((a,b)=>tallies[b.id].sponges-tallies[a.id].sponges).map(p => `<span>${p.name} 🧽×${tallies[p.id].sponges}</span>`).join("")}</div>`;
+  const row = (x, kind) => {
+    const val = kind === "fame" ? x.top : x.bot;
+    const who = PLAYERS.filter(p => x.s[p.id].correct === val);
+    const S = x.s[who[0].id];
+    const list = kind === "fame" ? PERKS : PUNISH;
+    const what = list[hashStr("w" + x.wk.week + kind) % list.length];
+    return `<div class="hrow"><span class="wk">Week ${x.wk.week}</span><div><b>${who.map(p=>p.name).join(" & ")}</b> (${S.correct}–${S.wrong})<small>${kind === "fame" ? "Prize" : "Punishment"}: ${esc(what)}</small></div></div>`;
+  };
+  $("fame").innerHTML = fameT + (doneWeeks.length ? doneWeeks.map(x => row(x, "fame")).join("") : "<div class='hrow'><small>First crown gets handed out when a week wraps up.</small></div>");
+  $("shame").innerHTML = shameT + (doneWeeks.length ? doneWeeks.map(x => row(x, "shame")).join("") : "<div class='hrow'><small>Nobody's been shamed yet… give it until Monday night.</small></div>");
 
 }
 
@@ -328,6 +383,7 @@ function render(){
     const msg = '<div class="empty">No picks yet this week. Make yours above! 👆</div>';
     $("board").innerHTML = msg; $("awards").innerHTML = msg; $("games").innerHTML = msg;
     renderTalk(w, weekStats(w));
+    $("podium").innerHTML = "";
     renderSeason();
     return;
   }
@@ -362,6 +418,8 @@ function render(){
   }).join("");
 
   renderTalk(w, st);
+  renderPodium(w, st);
+  updateCaptions(w);
 
   // awards
   const A = [];
@@ -416,6 +474,12 @@ function render(){
     if (Object.keys(g.picks).length >= 2 && (c1 === 0 || c1 === Object.keys(g.picks).length)) tags.push('<span class="tag lock">unanimous</span>');
     const st8 = g.winner == null ? `<span class="status ${g.live?"live":""}">${esc(g.live || g.kick || "Scheduled")}</span>` : `<span class="status final">Final${g.score ? " · " + esc(g.score) : ""}</span>`;
     const picks = PLAYERS.map(p => {
+      if (g.state === "pre"){
+        const r = g.raw[p.id];
+        if (!r) return `<div class="pick" style="box-shadow:inset 0 3px 0 ${p.color};opacity:.45"><div class="ini">${p.name}</div><div class="tm">—</div><div class="pp">no pick yet</div></div>`;
+        if (p.id === me) return `<div class="pick" style="box-shadow:inset 0 3px 0 ${p.color}"><div class="ini">${p.name} (you)</div><div class="tm">${tm(g, r)}</div><div class="pp">hidden from others</div></div>`;
+        return `<div class="pick" style="box-shadow:inset 0 3px 0 ${p.color}"><div class="ini">${p.name}</div><div class="tm">🔒</div><div class="pp">revealed at kickoff</div></div>`;
+      }
       const s = g.picks[p.id];
       if (!s) return `<div class="pick" style="box-shadow:inset 0 3px 0 ${p.color};opacity:.45"><div class="ini">${p.name}</div><div class="tm">—</div><div class="pp">no pick</div></div>`;
       const pr = pSide(g, s);
@@ -545,7 +609,7 @@ function lockerRoom(w, st){
     if (decided.length >= 5 && S.luck <= -1.5) add("hype", "unlucky", {name:p.name, x:fmt1(S.luck)}, p, 4);
   });
   const open = (w.all || []).filter(g => g.state === "pre");
-  if (open.length) PLAYERS.forEach(p => { if (!open.some(g => g.picks[p.id]) && !w.all.some(g => g.picks[p.id])) add("diss", "noPicks", {name:p.name}, p, 0.5); });
+  if (open.length) PLAYERS.forEach(p => { if (!w.all.some(g => g.raw[p.id])) add("diss", "noPicks", {name:p.name}, p, 0.5); });
   return out.sort((a, b) => a.prio - b.prio).slice(0, 8);
 }
 
@@ -554,6 +618,67 @@ function renderTalk(w, st){
   $("talk").innerHTML = L.length ? L.map(l => `<div class="quip ${l.kind}" style="--c:${l.p ? l.p.color : "#94a3b8"}">
       <span class="qic">${l.kind === "hype" ? "🔥" : "🗑️"}</span><span>${esc(l.text)}</span></div>`).join("")
     : '<div class="empty">Nothing to talk about yet. Give it a few games. 🍿</div>';
+}
+
+/* ---------- cartoon podium (redrawn every week from the results) ---------- */
+function figure(x, y, p, mood, hat){
+  const c = p.color;
+  const mouth = mood === "happy" ? `<path d="M${x-7} ${y-46} Q${x} ${y-39} ${x+7} ${y-46}" stroke="#111" stroke-width="2.2" fill="none" stroke-linecap="round"/>`
+    : mood === "sad" ? `<path d="M${x-7} ${y-41} Q${x} ${y-48} ${x+7} ${y-41}" stroke="#111" stroke-width="2.2" fill="none" stroke-linecap="round"/>`
+    : `<line x1="${x-6}" y1="${y-43}" x2="${x+6}" y2="${y-43}" stroke="#111" stroke-width="2.2" stroke-linecap="round"/>`;
+  let h = `<rect x="${x-15}" y="${y-30}" width="30" height="30" rx="9" fill="${c}"/>
+    <circle cx="${x}" cy="${y-48}" r="17" fill="#f3d2b3" stroke="${c}" stroke-width="3"/>
+    <circle cx="${x-6}" cy="${y-52}" r="2.2" fill="#111"/><circle cx="${x+6}" cy="${y-52}" r="2.2" fill="#111"/>${mouth}`;
+  if (mood === "happy") h += `<line x1="${x-15}" y1="${y-24}" x2="${x-27}" y2="${y-42}" stroke="${c}" stroke-width="6" stroke-linecap="round"/><line x1="${x+15}" y1="${y-24}" x2="${x+27}" y2="${y-42}" stroke="${c}" stroke-width="6" stroke-linecap="round"/>`;
+  if (hat === "crown") h += `<path d="M${x-15} ${y-62} L${x-15} ${y-78} L${x-7} ${y-69} L${x} ${y-82} L${x+7} ${y-69} L${x+15} ${y-78} L${x+15} ${y-62} Z" fill="#fbbf24" stroke="#b45309" stroke-width="1.5"/>`;
+  if (hat === "dunce") h += `<path d="M${x-13} ${y-61} L${x+3} ${y-100} L${x+14} ${y-60} Z" fill="#f8fafc" stroke="#94a3b8" stroke-width="1.5"/><text x="${x+2}" y="${y-68}" font-size="10" font-weight="800" text-anchor="middle" fill="#ef4444">L</text>`;
+  if (hat === "sponge") h += `<rect x="${x+16}" y="${y-22}" width="16" height="11" rx="2" fill="#fde047" transform="rotate(-15 ${x+24} ${y-16})"/><circle cx="${x+34}" cy="${y-30}" r="4" fill="none" stroke="#7dd3fc"/><circle cx="${x+40}" cy="${y-38}" r="3" fill="none" stroke="#7dd3fc"/><circle cx="${x+31}" cy="${y-42}" r="2.5" fill="none" stroke="#7dd3fc"/>`;
+  h += `<text x="${x}" y="${y+16}" font-size="13" font-weight="800" text-anchor="middle" fill="#eef1f8" font-family="Inter,sans-serif">${esc(p.name)}</text>`;
+  return h;
+}
+function renderPodium(w, st){
+  const el = $("podium");
+  const decided = w.games.filter(g => g.winner != null).length;
+  if (decided < 2){ el.innerHTML = ""; return; }
+  const order = [...PLAYERS].sort((a, b) => st[b.id].correct - st[a.id].correct || st[b.id].projected - st[a.id].projected);
+  const top = st[order[0].id].correct, bot = st[order[3].id].correct;
+  const slots = [[200, 128, 70], [110, 146, 52], [290, 158, 40]];   // x, standing y, block height for 1st/2nd/3rd
+  let svg = `<svg viewBox="0 0 470 230" role="img" aria-label="Week ${w.week} podium">
+    <text x="235" y="22" font-size="15" text-anchor="middle" fill="#fbbf24" font-family="Bebas Neue,Impact,sans-serif" letter-spacing="1">WEEK ${w.week} ${w.done ? "FINAL PODIUM" : "PODIUM (SO FAR)"}</text>`;
+  order.slice(0, 3).forEach((p, i) => {
+    const [x, y, hgt] = slots[i]; const S = st[p.id];
+    const isTop = S.correct === top && top > bot, isBot = S.correct === bot && top > bot;
+    svg += `<rect x="${x-38}" y="${y}" width="76" height="${hgt}" rx="4" fill="#1b2440" stroke="#253054"/>
+      <text x="${x}" y="${y+33}" font-size="11" text-anchor="middle" fill="#8d97b5" font-family="Inter,sans-serif">${["🥇","🥈","🥉"][i]} ${S.correct}-${S.wrong}</text>`;
+    svg += figure(x, y, p, isTop ? "happy" : isBot ? "sad" : "meh", isTop ? "crown" : isBot ? "dunce" : null);
+  });
+  const p4 = order[3], S4 = st[p4.id], isBot4 = S4.correct === bot && top > bot;
+  svg += `<rect x="408" y="138" width="54" height="30" rx="5" fill="#64748b"/><rect x="414" y="132" width="42" height="9" rx="3" fill="#94a3b8"/>
+    <path d="M452 132 Q452 120 444 120" stroke="#cbd5e1" stroke-width="4" fill="none"/>
+    <text x="395" y="214" font-size="10" text-anchor="middle" fill="#8d97b5" font-family="Inter,sans-serif">${isBot4 ? "the dish pit" : "4th"} · ${S4.correct}-${S4.wrong}</text>`;
+  svg += figure(388, 180, p4, isBot4 ? "sad" : "meh", isBot4 ? "sponge" : null);
+  el.innerHTML = svg + "</svg>";
+}
+
+/* ---------- photo captions that change every week ---------- */
+function updateCaptions(w){
+  const dec = w.games.filter(g => g.winner);
+  const ev = [];
+  let up = null; dec.forEach(g => { const pr = pSide(g, g.winner); if (!up || pr < up.pr) up = {g, pr}; });
+  if (up && up.pr < 0.45){ const t = tm(up.g, up.g.winner), pc = pct(up.pr);
+    ev.push(`Watching ${t} win at ${pc}`, `Nobody believed in ${t}. Except ${t}.`, `Me after finding out ${t} were only ${pc} to win`); }
+  dec.forEach(g => { const pk = PLAYERS.filter(p => g.picks[p.id]); if (pk.length >= 3 && pk.every(p => g.picks[p.id] !== g.winner))
+    ev.push(`The whole house after ${tm(g, 3 - g.winner)} lost to ${tm(g, g.winner)}`, `Group therapy for the ${tm(g, 3 - g.winner)} pick`); });
+  let ch = null; dec.forEach(g => { const fav = p1(g) >= 0.5 ? 1 : 2, pr = pSide(g, fav); if (g.winner !== fav && (!ch || pr > ch.pr)) ch = {g, fav, pr}; });
+  if (ch && ch.pr >= 0.6) ev.push(`Still not over ${tm(ch.g, ch.fav)} losing to ${tm(ch.g, 3 - ch.fav)}`, `Trusting ${tm(ch.g, ch.fav)} at ${pct(ch.pr)}. Never again.`);
+  ev.push(`Film study for Week ${w.week + 1}`, `Week ${w.week} recap meeting`, `Pre-game prayer circle, Week ${w.week + 1}`);
+  const seed = hashStr("cap" + w.week);
+  const pool = ev.map((c, i) => [hashStr(c + seed), c]).sort((a, b) => a[0] - b[0]).map(x => x[1]);
+  document.querySelectorAll(".polaroid").forEach((f, i) => {
+    const base = PHOTOS.find(x => x[0] === f.dataset.src)[1];
+    const cap = i < pool.length && i % 2 === 0 ? pool[i / 2 | 0] : base;
+    f.dataset.cap = cap; f.querySelector("figcaption").textContent = cap;
+  });
 }
 
 /* ---------- photo wall ---------- */
@@ -627,7 +752,7 @@ function buildWeeks(){
       const picks = {};
       PLAYERS.forEach(p => { const v = (picksBy[p.id] || {})[e.key]; if (v === 1 || v === 2) picks[p.id] = v; });
       const o = odds[e.key];
-      return { key: e.key, t1: e.t1, t2: e.t2, picks, date: e.date, state: e.state,
+      return { key: e.key, t1: e.t1, t2: e.t2, raw: picks, picks: e.state === "pre" ? {} : picks, date: e.date, state: e.state,
         ml1: o ? o[0] : e.mlA, ml2: o ? o[1] : e.mlH,
         winner: e.state === "post" ? (e.s1 > e.s2 ? 1 : e.s2 > e.s1 ? 2 : 0) : null,
         score: e.state === "post" ? `${e.s1}-${e.s2}` : null,
@@ -635,7 +760,8 @@ function buildWeeks(){
         liveScore: e.state === "in" ? [e.s1, e.s2] : null,
         kick: e.state === "pre" ? e.detail : null };
     });
-    return { week: wn, all: games, games: games.filter(g => Object.keys(g.picks).length) };
+    const shown = games.filter(g => Object.keys(g.raw).length);
+    return { week: wn, all: games, games: shown, done: shown.length > 0 && shown.every(g => g.winner != null) };
   });
 }
 
@@ -644,7 +770,7 @@ function renderPicker(w){
   const el = $("picker");
   const open = w.all.filter(g => g.state === "pre");
   const subs = PLAYERS.map(p => {
-    const n = w.all.filter(g => g.picks[p.id]).length;
+    const n = w.all.filter(g => g.raw[p.id]).length;
     return `<span style="border-color:${p.color}">${p.name} ${n ? "✅ " + n : "— 0"}/${w.all.length}</span>`;
   }).join("");
   let h = `<h3>🏈 Make your picks · Week ${w.week}</h3>`;
@@ -652,7 +778,7 @@ function renderPicker(w){
     el.innerHTML = h + `<div class="hint">Every Week ${w.week} game has kicked off, so picks are locked.</div><div class="subs">${subs}</div>`;
     return;
   }
-  h += `<div class="hint">Tap who you are, then tap the team you think wins each game. Each game locks at kickoff. You can change picks until then.</div>`;
+  h += `<div class="hint">Tap who you are, then tap the team you think wins each game. Each game locks at kickoff, and nobody can see anyone else\'s picks until then. 🤫</div>`;
   h += `<div class="subs">${subs}</div>`;
   h += `<div class="who-row">` + PLAYERS.map(p => `<button class="who-btn ${me===p.id?"on":""}" style="--c:${p.color}" data-me="${p.id}">${p.name}</button>`).join("") + `</div>`;
   if (me){
@@ -661,12 +787,12 @@ function renderPicker(w){
     if (lockedN) h += `<div class="hint">🔒 ${lockedN} game${lockedN>1?"s have":" has"} already kicked off and ${lockedN>1?"are":"is"} locked.</div>`;
     open.forEach(g => {
       const locked = false;
-      const cur = draft[g.key] || g.picks[me];
+      const cur = draft[g.key] || g.raw[me];
       const day = new Date(g.date).toLocaleDateString([], {weekday:"short", month:"short", day:"numeric"});
       const time = new Date(g.date).toLocaleTimeString([], {hour:"numeric", minute:"2-digit"});
       const p1v = p1(g);
       const btn = (side, team, pr) => `<button class="tbtn ${cur===side?"on":""}" data-k="${g.key}" data-s="${side}" ${locked?"disabled":""}>${team}<small>${g.ml1==null?"":pct(pr)+" to win"}</small></button>`;
-      h += `<div class="prow"><div class="when">${day !== lastDay ? day + " · " : ""}${time}${locked ? " · 🔒 locked" + (g.picks[me] ? "" : " (no pick)") : ""}</div>${btn(1, g.t1, p1v)}${btn(2, "@ " + g.t2, 1 - p1v)}</div>`;
+      h += `<div class="prow"><div class="when">${day !== lastDay ? day + " · " : ""}${time}${locked ? " · 🔒 locked" + (g.raw[me] ? "" : " (no pick)") : ""}</div>${btn(1, g.t1, p1v)}${btn(2, "@ " + g.t2, 1 - p1v)}</div>`;
       lastDay = day;
     });
     const changed = Object.keys(draft).length;
@@ -680,7 +806,7 @@ function renderPicker(w){
   });
   el.querySelectorAll(".tbtn").forEach(b => b.onclick = () => {
     const k = b.dataset.k, side = +b.dataset.s, g = w.all.find(x => x.key === k);
-    if (g.picks[me] === side) delete draft[k]; else draft[k] = side;
+    if (g.raw[me] === side) delete draft[k]; else draft[k] = side;
     saveMsg = ""; renderPicker(w);
   });
   const sb = $("savebtn");
