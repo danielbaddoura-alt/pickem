@@ -758,6 +758,16 @@ let STORE = {}, ESPN = {}, CURRENT = null, lastSync = null, syncErr = false, fir
 let me = null, draft = {}, saving = false, saveMsg = "";
 try { me = localStorage.getItem("pickem-me"); } catch (e) {}
 
+function mlOf(o, side){
+  const t = o[side + "TeamOdds"];
+  if (t && t.moneyLine != null && !isNaN(+t.moneyLine)) return +t.moneyLine;
+  const m = o.moneyline && o.moneyline[side];
+  const raw = m && ((m.close && m.close.odds) || (m.open && m.open.odds));
+  if (!raw) return null;
+  if (/^even$/i.test(raw)) return 100;
+  const n = parseInt(String(raw).replace("+", ""), 10);
+  return isNaN(n) ? null : n;
+}
 async function fetchEspn(week){
   const url = "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?" +
     (week ? `dates=${SEASON}&seasontype=2&week=${week}` : "");
@@ -772,8 +782,7 @@ async function fetchEspn(week){
     const t1 = norm(away.team.abbreviation), t2 = norm(home.team.abbreviation);
     return { key: t1 + "@" + t2, t1, t2, date: ev.date, state: st.state, detail: st.shortDetail,
       s1: +away.score || 0, s2: +home.score || 0,
-      mlA: o.awayTeamOdds && o.awayTeamOdds.moneyLine != null ? +o.awayTeamOdds.moneyLine : null,
-      mlH: o.homeTeamOdds && o.homeTeamOdds.moneyLine != null ? +o.homeTeamOdds.moneyLine : null };
+      mlA: mlOf(o, "away"), mlH: mlOf(o, "home") };
   }).sort((a, b) => a.date.localeCompare(b.date));
   return { week: j.week && j.week.number, seasonType: j.season && j.season.type, games };
 }
@@ -887,7 +896,14 @@ async function sync(once){
   clearTimeout(timer);
   try {
     const cur = await fetchEspn(null);
-    if (cur.seasonType === 2 && cur.week){ CURRENT = cur.week; ESPN[cur.week] = cur.games; }
+    if (cur.seasonType === 2 && cur.week){
+      CURRENT = cur.week; ESPN[cur.week] = cur.games;
+      // ESPN keeps showing last week until midweek: once every game is final, open the next week
+      if (cur.games.length && cur.games.every(g => g.state === "post") && cur.week < 18){
+        const nx = await fetchEspn(cur.week + 1);
+        if (nx.games.length){ CURRENT = cur.week + 1; ESPN[CURRENT] = nx.games; }
+      }
+    }
     STORE = await fetchStore();
     const need = new Set(Object.keys(STORE.weeks || {}).map(Number));
     await Promise.all([...need].filter(n => n !== CURRENT).map(async n => { ESPN[n] = (await fetchEspn(n)).games; }));
